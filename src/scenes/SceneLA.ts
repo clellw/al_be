@@ -4,6 +4,7 @@ export class SceneLA {
     
     scene: Scene;
     engine: Engine;
+    ball: any;
 
     constructor(private canvas:HTMLCanvasElement){
         this.engine = new Engine(this.canvas, true);
@@ -35,13 +36,20 @@ export class SceneLA {
 
         this.CreateMovment(scene);
 
+        // Faire suivre la caméra à la balle
+        scene.onBeforeRenderObservable.add(() => {
+            if (this.ball) {
+                camera.position.x = this.ball.position.x;
+            }
+        });
+
         return scene;
     }
 
     CreateMovment(scene: Scene): void {
-        const ball = MeshBuilder.CreateSphere("ball", {diameter:1}, this.scene);
+        this.ball = MeshBuilder.CreateSphere("ball", {diameter:1}, this.scene);
 
-        ball.position = new Vector3(0,1,0);
+        this.ball.position = new Vector3(0,1,0);
 
         const keyStatus = {q:false,s:false};
 
@@ -77,13 +85,13 @@ export class SceneLA {
             if(keyStatus.q||keyStatus.s){
                 moving=true;
                 if(keyStatus.q && !keyStatus.s){
-                    ball.position.x += acceleration;
+                    this.ball.position.x += acceleration;
                     if(acceleration>-speed){
                         acceleration-=0.004;
                     }
                 }
                 else if(keyStatus.s ){
-                    ball.position.x += acceleration;
+                    this.ball.position.x += acceleration;
                     if(acceleration<speed){
                         acceleration+=0.004;
                     }
@@ -92,11 +100,11 @@ export class SceneLA {
             else{
                 if(acceleration>0){
                     acceleration-=0.002;
-                    ball.position.x += acceleration;
+                    this.ball.position.x += acceleration;
                 }
                 else if(acceleration<0){
                     acceleration+=0.002;
-                    ball.position.x += acceleration;
+                    this.ball.position.x += acceleration;
                 }
                 else if(Math.abs(acceleration)<0.002){
                     acceleration=0;
