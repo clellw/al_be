@@ -1,4 +1,4 @@
-import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder,ActionManager, ExecuteCodeAction} from "@babylonjs/core"
+import {Scene, Engine, FollowCamera, FreeCamera, Vector3, HemisphericLight, MeshBuilder,ActionManager, ExecuteCodeAction} from "@babylonjs/core"
 
 export class SceneLA {
     
@@ -36,13 +36,6 @@ export class SceneLA {
 
         this.CreateMovment(scene);
 
-        // Faire suivre la caméra à la balle
-        scene.onBeforeRenderObservable.add(() => {
-            if (this.ball) {
-                camera.position.x = this.ball.position.x;
-            }
-        });
-
         return scene;
     }
 
@@ -54,6 +47,15 @@ export class SceneLA {
         const keyStatus = {q:false,s:false};
 
         scene.actionManager = new ActionManager(scene);
+
+        const followCamera = new FollowCamera("FollowCamera",new Vector3(0, 5, 0),scene);
+        followCamera.radius = 5; // Distance from the target
+        followCamera.heightOffset = 0; // Height above the target
+        followCamera.rotationOffset = 0; // Angle around the target
+        followCamera.cameraAcceleration = 0.5; // How fast to move
+        followCamera.maxCameraSpeed = 100000;
+        followCamera.lockedTarget = this.ball; // Replace 'characterMesh' with your mesh
+        scene.activeCamera = followCamera;
 
         scene.actionManager.registerAction(new ExecuteCodeAction
             (ActionManager.OnKeyDownTrigger,(event)=>{
@@ -79,18 +81,18 @@ export class SceneLA {
         );
 
         let moving=false;
-        const speed=0.1;
+        const speed=0.12;
         let acceleration=0;
         scene.onBeforeRenderObservable.add(()=>{
             if(keyStatus.q||keyStatus.s){
                 moving=true;
-                if(keyStatus.q && !keyStatus.s){
+                if(keyStatus.s && !keyStatus.q){
                     this.ball.position.x += acceleration;
                     if(acceleration>-speed){
                         acceleration-=0.004;
                     }
                 }
-                else if(keyStatus.s ){
+                else if(keyStatus.q ){
                     this.ball.position.x += acceleration;
                     if(acceleration<speed){
                         acceleration+=0.004;
