@@ -6,13 +6,13 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import { SceneLA } from '@/scenes/SceneLA';
+import { FirstScene } from '@/scenes/FirstScene';
 
 export default defineComponent({
   name: 'PaperClip',
   mounted(){
     const canvas = document.querySelector("canvas")!;
-    new SceneLA(canvas);
+    new FirstScene(canvas);
   }
 });
 </script>
@@ -21,8 +21,8 @@ export default defineComponent({
 <style scoped>
 
 canvas {
-  width: 70%;
-  height: 70%;
+  width: 100%;
+  height: 100%;
 }
 
 </style>
