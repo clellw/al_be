@@ -6,13 +6,13 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import { FirstScene } from '@/scenes/FirstScene';
+import { SceneLA } from '@/scenes/SceneLA';
 
 export default defineComponent({
   name: 'PaperClip',
   mounted(){
     const canvas = document.querySelector("canvas")!;
-    new FirstScene(canvas);
+    new SceneLA(canvas);
   }
 });
 </script>
