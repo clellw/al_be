@@ -80,7 +80,7 @@ export class SceneLA {
         lyrina.playAnimation(0, 7, true, 100);
 
         //creating the movements of the player and the camera
-        const keyStatus = {q:false,s:false};
+        const keyStatus: { [key: string]: boolean } = { q: false, s: false, ' ': false };
         
         scene.actionManager = new ActionManager(scene);
         
@@ -88,7 +88,7 @@ export class SceneLA {
         followCamera.radius = 1.7; // Distance from the target
         followCamera.heightOffset = 0; // Height above the target
         followCamera.rotationOffset = 0; // Angle around the target
-        followCamera.cameraAcceleration = 0.9; // How fast to move
+        followCamera.cameraAcceleration = 0.95; // How fast to move
         followCamera.maxCameraSpeed = 100000;
 
         // FollowCamera needs a mesh target, so we create an invisible box to track the sprite
@@ -105,8 +105,8 @@ export class SceneLA {
         let groundcheat = ground.clone("groundcheat");
         groundcheat.isVisible = false;
         while(!this.isCollidingWithBlock(spriteAnchor, ground)){
-            lyrina.position.y -= 0.01;
-            spriteAnchor.position.y -= 0.01;
+            lyrina.position.y -= 0.001;
+            spriteAnchor.position.y -= 0.001;
         }
         scene.actionManager.registerAction(new ExecuteCodeAction
             (ActionManager.OnKeyDownTrigger,(event)=>{
@@ -115,7 +115,7 @@ export class SceneLA {
                     key = key.toLowerCase();
                 }
                 if(key in keyStatus){
-                    keyStatus[key as keyof typeof keyStatus] = true;
+                    keyStatus[key] = true;
                 }
             })
         );
@@ -127,17 +127,59 @@ export class SceneLA {
                     key = key.toLowerCase();
                 }
                 if(key in keyStatus){
-                    keyStatus[key as keyof typeof keyStatus] = false;
+                    keyStatus[key] = false;
                 }
             })
         );
 
         let newAnim = true;
         const speed=0.07;
+        const jumpSpeed=0.12;
         let acceleration=0;
+        let verticalSpeed=0;
+        let jumpcharge=12;
+        let isjumping=false;
         scene.onBeforeRenderObservable.add(()=>{
-            if(!this.isCollidingWithBlock(spriteAnchor, ground)){
-                lyrina.position.y -= 0.001;
+            if((!this.isCollidingWithBlock(spriteAnchor, ground))&&(!isjumping)){
+                for(let i=0;i<60;i++){
+                    if(!this.isCollidingWithBlock(spriteAnchor, ground)){
+                        lyrina.position.y -= 0.001;
+                        spriteAnchor.position.y -= 0.001;
+                    }
+                }
+            }
+            if(keyStatus[" "]||((!this.isCollidingWithBlock(spriteAnchor, ground))&& jumpcharge>8)){
+                if(this.isCollidingWithBlock(spriteAnchor, ground)){
+                    jumpcharge=12;
+                    
+                }
+                if((this.isCollidingWithBlock(spriteAnchor, ground)||jumpcharge>0)){
+                    
+                    
+                    if (jumpcharge>10){
+                        isjumping=true;
+                        lyrina.position.y += verticalSpeed;
+                        if(verticalSpeed<jumpSpeed){
+                            verticalSpeed+=0.05;
+                        }
+                    }
+                    else if(jumpcharge>6){
+                        isjumping=true;
+                        lyrina.position.y += verticalSpeed;
+                        if(verticalSpeed<jumpSpeed){
+                            verticalSpeed+=0.01;
+                        }
+                    }
+                    else{
+                        lyrina.position.y += verticalSpeed;
+                    }
+                    
+                }
+            }
+            else{
+                isjumping=false;
+                jumpcharge=0;
+                verticalSpeed=0;
             }
             if(keyStatus.q||keyStatus.s){
                 if(newAnim) {
@@ -182,6 +224,14 @@ export class SceneLA {
                 }
             }
             else{
+                if((Math.abs(verticalSpeed)<0.009)){
+                    verticalSpeed=0;
+                    isjumping=false;
+                }
+                else if(verticalSpeed>0){
+                    verticalSpeed-=0.008;
+                    lyrina.position.y += verticalSpeed;
+                }
                 if(Math.abs(acceleration)<0.006){
                     acceleration=0;
                 }
@@ -213,6 +263,12 @@ export class SceneLA {
                     if(!newAnim)lyrina.playAnimation(0,7,true,100);
                     newAnim = true;
                 }
+            }
+            if(!(this.isCollidingWithBlock(spriteAnchor, ground))){
+                jumpcharge-=1;
+            }
+            if(jumpcharge==0){
+                isjumping=false;
             }
             //update the position of the anchor
             spriteAnchor.position.copyFrom(lyrina.position);
