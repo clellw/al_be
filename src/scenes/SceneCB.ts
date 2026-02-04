@@ -1,4 +1,4 @@
-import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction} from "@babylonjs/core"
+import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture} from "@babylonjs/core"
 
 export class SceneCB {
     
@@ -35,6 +35,8 @@ export class SceneCB {
         sphere.material.wireframe = true;
 
         this.CreateMainCharacter(scene);
+
+        this.CreateEnvironment(scene);
 
         return scene;
     }
@@ -114,5 +116,42 @@ export class SceneCB {
             }
             
         });
+    }
+
+    async CreateEnvironment(scene:Scene): Promise<void> {
+
+        const spriteManager = new SpriteManager(
+            "tilesManager",
+            "./sprites/grass_m.png",
+            100,           // max number of sprites
+            96, 
+            scene
+        );
+
+        // Create a few tiles
+        for (let i = 0; i < 10; i++) {
+            const tile = new Sprite("tile" + i, spriteManager);
+            tile.position.x = -9 * 0.147 / 2 + i * 0.147; // space tiles apart
+            tile.size = 0.15;
+            tile.position.y = -0.18;
+            tile.position.z = 0.1;
+            tile.cellIndex = 0; // choose tile from sprite sheet
+        }
+
+        const skybox = Mesh.CreateBox("BackgroundSkybox", 500, scene, undefined, Mesh.BACKSIDE);
+    
+        // Create and tweak the background material.
+        const backgroundManager = new SpriteManager(
+            "tilesManager",
+            "./sprites/place_holder_b.jpg",
+            100,           
+            {width:961, height:501}, 
+            scene
+        );
+        const background = new Sprite("background", backgroundManager);
+        background.position.z = 2;
+        background.position.y = 1;
+        background.width = 6;
+        background.height = 2.9;
     }
 }
