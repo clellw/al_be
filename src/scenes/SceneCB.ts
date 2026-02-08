@@ -1,4 +1,5 @@
-import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture} from "@babylonjs/core"
+import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
+import * as GUI from '@babylonjs/gui'
 
 export class SceneCB {
     
@@ -37,6 +38,7 @@ export class SceneCB {
         this.CreateMainCharacter(scene);
 
         this.CreateEnvironment(scene);
+        //this.CreateDialog(scene);
 
         return scene;
     }
@@ -154,4 +156,74 @@ export class SceneCB {
         background.width = 6;
         background.height = 2.9;
     }
+
+    /*async CreateDialog(scene:Scene): Promise<void> {
+        const font = new FontFace('MyCustomFont', 'url(./font/ARCADECLASSIC.TTF)');
+        font.load();
+        font.load().then((loadedFont) => {
+            document.fonts.add(loadedFont);
+            console.log('Font loaded and ready to use in Babylon.js');
+        });
+        const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+        const dialogBox = new GUI.Rectangle();
+        dialogBox.width = 0.7;
+        dialogBox.height = 0.3;
+        dialogBox.paddingBottom = "70px"
+        dialogBox.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+        dialogBox.cornerRadius = 0;
+        dialogBox.color = "white";
+        dialogBox.thickness = 4;
+        dialogBox.background = "black";
+        dialogBox.fontFamily = "MyCustomFont";
+        advancedTexture.addControl(dialogBox);
+
+        const panel = new GUI.StackPanel();
+        dialogBox.addControl(panel);
+
+        const title = new GUI.TextBlock();
+        title.text = "lyrina";
+        title.paddingLeft = "20px";
+        title.textHorizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        title.height = "40px";
+        title.color = "gray";
+        title.fontSize = 24;
+        panel.addControl(title);
+
+        // Message
+        const message = new GUI.TextBlock();
+        message.text = "Is it hard to  communicate  with  this? seems  like  it is  for  now. I could  stubornly figure out how to  write  every  dialog. seems  like  a  chore  though.";
+        message.fontSize = 27;
+        message.height = "70px";
+        message.color = "white";
+        message.textWrapping = true;
+        panel.addControl(message);
+
+         const buttonPanel = new GUI.StackPanel();
+        buttonPanel.isVertical = false;
+        buttonPanel.height = "50px";
+        buttonPanel.width = "50px";
+        buttonPanel.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        panel.addControl(buttonPanel);
+
+        const block = MeshBuilder.CreateBox("block", {width:1, height:0.5, depth:0.1});
+        block.position = new Vector3(0,0,-0.5);
+        const mat = new StandardMaterial("m");
+        mat.alpha = 0.2;
+        mat.diffuseColor = new Color3(0,0,0);
+        block.material = mat;
+
+        const yesButton = GUI.Button.CreateImageButton("next", "","./sprites/dialogButton.png");
+        yesButton.width = "160px";
+        yesButton.height = "40px";
+        yesButton.thickness = 0;
+        yesButton.color = "white";
+        yesButton.paddingRight = "20px";
+        yesButton.onPointerUpObservable.add(() => {
+            console.log("User clicked Next");
+            //dialogBox.isVisible = false; // Hide dialog
+            message.text = "I hope it works without any issue. could be annoying very fast if it didn't.";
+            mat.alpha = 0.5;
+        });
+        buttonPanel.addControl(yesButton);
+    }*/
 }
