@@ -1,4 +1,4 @@
-import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, FollowCamera, ActionManager, ExecuteCodeAction, StandardMaterial, Mesh} from "@babylonjs/core"
+import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, FollowCamera, ActionManager, ExecuteCodeAction, StandardMaterial} from "@babylonjs/core"
 
 export class SceneLA {
     
@@ -31,41 +31,15 @@ export class SceneLA {
         sphere.material.wireframe = true;
 
         this.CreateCharacter(scene);
-
+        scene.collisionsEnabled = true;
         return scene;
-    }
-
-    isCollidingWithBlock (spriteAnchor: Mesh, block: Mesh): boolean{
-        const spriteMin = new Vector3(
-            spriteAnchor.position.x - spriteAnchor.scaling.x * spriteAnchor.getBoundingInfo().boundingBox.extendSize.x,
-            spriteAnchor.position.y - spriteAnchor.scaling.y * spriteAnchor.getBoundingInfo().boundingBox.extendSize.y,
-            0
-        );
-        const spriteMax = new Vector3(
-            spriteAnchor.position.x + spriteAnchor.scaling.x * spriteAnchor.getBoundingInfo().boundingBox.extendSize.x,
-            spriteAnchor.position.y + spriteAnchor.scaling.y * spriteAnchor.getBoundingInfo().boundingBox.extendSize.y,
-            0
-        );
-
-        const blockMin = new Vector3(
-            block.position.x - block.scaling.x * block.getBoundingInfo().boundingBox.extendSize.x,
-            block.position.y - block.scaling.y * block.getBoundingInfo().boundingBox.extendSize.y,
-            0
-        );
-        const blockMax = new Vector3(
-            block.position.x + block.scaling.x * block.getBoundingInfo().boundingBox.extendSize.x,
-            block.position.y + block.scaling.y * block.getBoundingInfo().boundingBox.extendSize.y,
-            0
-        );
-
-        return spriteMin.x <= blockMax.x && spriteMax.x >= blockMin.x &&
-                spriteMin.y <= blockMax.y && spriteMax.y >= blockMin.y;
     }
 
     async CreateCharacter(scene:Scene): Promise<void> {
 
         const ground = MeshBuilder.CreateBox('block', {width: 10, height: 0.1, depth: 0.5}, this.scene);
         ground.position = new Vector3(0,-0.18,0);
+        ground.checkCollisions = true;
 
         //importing the sprites for the character
         const LManager = new SpriteManager(
@@ -80,34 +54,31 @@ export class SceneLA {
         lyrina.playAnimation(0, 7, true, 100);
 
         //creating the movements of the player and the camera
-        const keyStatus = {q:false,s:false};
+        const keyStatus: { [key: string]: boolean } = { q: false, s: false, ' ': false };
         
         scene.actionManager = new ActionManager(scene);
-        
-        const followCamera = new FollowCamera("FollowCamera",new Vector3(0, 1.7, 0),scene);
-        followCamera.radius = 1.7; // Distance from the target
-        followCamera.heightOffset = 0; // Height above the target
-        followCamera.rotationOffset = 0; // Angle around the target
-        followCamera.cameraAcceleration = 0.9; // How fast to move
-        followCamera.maxCameraSpeed = 100000;
 
-        // FollowCamera needs a mesh target, so we create an invisible box to track the sprite
-        const spriteAnchor = MeshBuilder.CreateBox("anchor", {width: lyrina.width/4, height: lyrina.height/1.71, depth:0.1}, scene);
-        spriteAnchor.material = new StandardMaterial('invisibleMat', scene);
-        spriteAnchor.material.wireframe = true;
-        spriteAnchor.isVisible = true;
-        spriteAnchor.position = lyrina.position.clone();
-        spriteAnchor.position.y -= 0.009;
-        followCamera.lockedTarget = spriteAnchor;
-        scene.activeCamera = followCamera;
-        let spriteAnchorpotentiel = spriteAnchor.clone("spriteAnchorpotentiel");
-        spriteAnchorpotentiel.isVisible = false;
-        let groundcheat = ground.clone("groundcheat");
-        groundcheat.isVisible = false;
-        while(!this.isCollidingWithBlock(spriteAnchor, ground)){
-            lyrina.position.y -= 0.01;
-            spriteAnchor.position.y -= 0.01;
-        }
+        const sideCamera = new FreeCamera("SideCamera", new Vector3(0, 0.5, 2.3), scene);
+        // Make camera look toward -Z (scene) so it doesn't look into empty space
+        sideCamera.setTarget(new Vector3(sideCamera.position.x, sideCamera.position.y, 0));
+
+        // Player collider sized in world units based on sprite size (not texture pixels)
+        const colliderWidth = lyrina.size * 0.25;   // narrower than sprite width
+        const colliderHeight = lyrina.size /1.71;   // close to sprite height
+        const colliderDepth = 0.1;                  // thin depth for 2D side view
+        const playerCollider = MeshBuilder.CreateBox("playerCollider", {width: colliderWidth, height: colliderHeight, depth: colliderDepth}, scene);
+        playerCollider.isVisible = true;
+        playerCollider.material = new StandardMaterial('playerMaterial', scene);
+        playerCollider.material.wireframe = true;
+        playerCollider.checkCollisions = true;
+        // Use ellipsoid collisions for smoother contact; align bottom of ellipsoid to feet
+        playerCollider.ellipsoid = new Vector3(colliderWidth/2, colliderHeight/2, colliderDepth/2);
+        playerCollider.ellipsoidOffset = new Vector3(0, 0, 0);
+        playerCollider.position = lyrina.position.clone();
+        const fixedCameraY = sideCamera.position.y;
+        scene.activeCamera = sideCamera;
+
+        
         scene.actionManager.registerAction(new ExecuteCodeAction
             (ActionManager.OnKeyDownTrigger,(event)=>{
                 let key = event.sourceEvent.key;
@@ -119,7 +90,6 @@ export class SceneLA {
                 }
             })
         );
-
         scene.actionManager.registerAction(new ExecuteCodeAction
             (ActionManager.OnKeyUpTrigger,(event)=>{
                 let key = event.sourceEvent.key;
@@ -135,49 +105,62 @@ export class SceneLA {
         let newAnim = true;
         const speed=0.07;
         let acceleration=0;
+        const gravity = 0.0049999999;
+        const jumpStrength = 0.09;
+        let verticalVelocity = 0;
+        let isGrounded = false;
+        let isLanded = false;
+        let falling=false;
         scene.onBeforeRenderObservable.add(()=>{
-            if(!this.isCollidingWithBlock(spriteAnchor, ground)){
-                lyrina.position.y -= 0.001;
+            // Jump input: start jump only if grounded
+            if (keyStatus[' '] && isGrounded) {
+                verticalVelocity = jumpStrength;
+                isGrounded = false;
+                lyrina.playAnimation(14,15,true,120);
+                newAnim = true;
             }
+
+            if(!isGrounded && verticalVelocity <0 && !falling){
+                lyrina.playAnimation(16,17,true,120);
+                falling = true;
+            }
+
+            // Apply vertical physics (gravity affects verticalVelocity)
+            verticalVelocity -= gravity;
+            const prevY = playerCollider.position.y;
+            playerCollider.moveWithCollisions(new Vector3(0, verticalVelocity, 0));
+            const actualDeltaY = playerCollider.position.y - prevY;
+
+            // Grounded detection: if moving down but blocked, snap to ground and zero vertical
+            if (verticalVelocity < 0 && actualDeltaY > verticalVelocity * 0.5) {
+                isGrounded = true;
+                if(verticalVelocity < -0.005) isLanded = true;
+                verticalVelocity = 0;
+            } else if (verticalVelocity > 0 && actualDeltaY < verticalVelocity * 0.5) {
+                // Hit ceiling: stop upward motion
+                verticalVelocity = 0;
+            } else {
+                isGrounded = false;
+                falling = false;
+            }
+            
             if(keyStatus.q||keyStatus.s){
-                if(newAnim) {
+                if(newAnim && isGrounded) {
                     lyrina.playAnimation(9, 13, true, 120);
                     newAnim = false
                 }
                 if(keyStatus.s && !keyStatus.q){
                     lyrina.invertU = false;
-                    spriteAnchorpotentiel = spriteAnchor.clone("spriteAnchorpotentiel");
-                    spriteAnchorpotentiel.isVisible = false;
-                    spriteAnchorpotentiel.position.x += acceleration;
-                    groundcheat = ground.clone("groundcheat");
-                    groundcheat.isVisible = false;
-                    groundcheat.position.y -= 0.01;
-                    if(!this.isCollidingWithBlock(spriteAnchorpotentiel, groundcheat)){
-                        lyrina.position.x += acceleration;
-                        if(acceleration>-speed){
-                            acceleration-=0.004;
-                        }
-                    }
-                    else{
-                        acceleration=0;
+                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    if(acceleration>-speed){
+                        acceleration-=0.004;
                     }
                 }
                 else if(keyStatus.q ){
                     lyrina.invertU = true;
-                    spriteAnchorpotentiel = spriteAnchor.clone("spriteAnchorpotentiel");
-                    spriteAnchorpotentiel.isVisible = false;
-                    spriteAnchorpotentiel.position.x += acceleration;
-                    groundcheat = ground.clone("groundcheat");
-                    groundcheat.isVisible = false;
-                    groundcheat.position.y -= 0.01;
-                    if(!this.isCollidingWithBlock(spriteAnchorpotentiel, groundcheat)){
-                        lyrina.position.x += acceleration;
-                        if(acceleration<speed){
-                            acceleration+=0.004;
-                        }
-                    }
-                    else{
-                        acceleration=0;
+                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    if(acceleration<speed){
+                        acceleration+=0.004;
                     }
                 }
             }
@@ -187,36 +170,23 @@ export class SceneLA {
                 }
                 else if(acceleration>0){
                     acceleration-=0.008;
-                    spriteAnchorpotentiel = spriteAnchor.clone("spriteAnchorpotentiel");
-                    spriteAnchorpotentiel.isVisible = false;
-                    spriteAnchorpotentiel.position.x += acceleration;
-                    groundcheat = ground.clone("groundcheat");
-                    groundcheat.isVisible = false;
-                    groundcheat.position.y -= 0.01;
-                    if(!this.isCollidingWithBlock(spriteAnchorpotentiel, groundcheat)){
-                        lyrina.position.x += acceleration;
-                    }
+                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
                 }
                 else if(acceleration<0){
                     acceleration+=0.008;
-                    spriteAnchorpotentiel = spriteAnchor.clone("spriteAnchorpotentiel");
-                    spriteAnchorpotentiel.isVisible = false;
-                    spriteAnchorpotentiel.position.x += acceleration;
-                    groundcheat = ground.clone("groundcheat");
-                    groundcheat.isVisible = false;
-                    groundcheat.position.y -= 0.01;
-                    if(!this.isCollidingWithBlock(spriteAnchorpotentiel, groundcheat)){
-                        lyrina.position.x += acceleration;
-                    }
+                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
                 }
-                if(acceleration==0){
+                if(acceleration==0 && isGrounded){
                     if(!newAnim)lyrina.playAnimation(0,7,true,100);
                     newAnim = true;
                 }
+                if(verticalVelocity==0 && isLanded){
+                    lyrina.playAnimation(0,7,true,100);
+                    isLanded = false;
+                }
             }
-            //update the position of the anchor
-            spriteAnchor.position.copyFrom(lyrina.position);
-            spriteAnchor.position.y -= 0.009;
+            lyrina.position.copyFrom(playerCollider.position);
+            sideCamera.position.x = playerCollider.position.x;
             console.log(acceleration);
         });
     }
