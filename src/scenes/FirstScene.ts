@@ -41,7 +41,7 @@ export class FirstScene {
         //importing the sprites for the character
         const LManager = new SpriteManager(
             'LManager',
-            './sprites/spritesheet_L.png',
+            './sprites/spritesheet_lyrina.png',
             1,
             336,
             scene
