@@ -38,7 +38,7 @@ export class SceneCB {
         this.CreateMainCharacter(scene);
 
         this.CreateEnvironment(scene);
-        //this.CreateDialog(scene);
+        this.CreateDialog(scene);
 
         return scene;
     }
@@ -157,7 +157,7 @@ export class SceneCB {
         background.height = 2.9;
     }
 
-    /*async CreateDialog(scene:Scene): Promise<void> {
+    async CreateDialog(scene:Scene): Promise<void> {
         const font = new FontFace('MyCustomFont', 'url(./font/ARCADECLASSIC.TTF)');
         font.load();
         font.load().then((loadedFont) => {
@@ -165,7 +165,7 @@ export class SceneCB {
             console.log('Font loaded and ready to use in Babylon.js');
         });
         const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
-        const dialogBox = new GUI.Rectangle();
+        /*const dialogBox = new GUI.Rectangle();
         dialogBox.width = 0.7;
         dialogBox.height = 0.3;
         dialogBox.paddingBottom = "70px"
@@ -224,6 +224,55 @@ export class SceneCB {
             message.text = "I hope it works without any issue. could be annoying very fast if it didn't.";
             mat.alpha = 0.5;
         });
-        buttonPanel.addControl(yesButton);
-    }*/
+        buttonPanel.addControl(yesButton);*/
+        
+        const healthbar = new GUI.Image("healthbar", "./sprites/healthbar_l.png");
+
+        healthbar.paddingLeft = "4%";
+        healthbar.paddingTop = "5%";
+        healthbar.height = "25%";
+        healthbar.width = "30%";
+        healthbar.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        healthbar.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        advancedTexture.addControl(healthbar);
+
+        const health_g = new GUI.Image("healthbar", "./sprites/health_g.png");
+        health_g.paddingLeft = "14.35%";
+        health_g.paddingTop = "20.4%";
+        health_g.height = "18.9%";
+        health_g.width = "28.2%";
+        health_g.sourceLeft = 0; //crop image ; 440 crops all the healthbar
+        health_g.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        health_g.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        advancedTexture.addControl(health_g);
+        let part = 2;
+
+        let health = 440;
+
+        scene.actionManager.registerAction(new ExecuteCodeAction
+            (ActionManager.OnKeyDownTrigger, 
+                (event) => {
+                    let key = event.sourceEvent.key;
+                    if(key !== "Shift") {
+                        key = key.toLowerCase();
+                    }
+                    if(key == "r") {
+                        health -= 20;
+                        if(part == 2 && health <= 220) {
+                            health_g.source = "./sprites/health_o.png";
+                            part = 1;
+                        }
+                        
+                        if(part ==1 && health <= 80) {
+                            health_g.source = "./sprites/health_r.png";
+                            part = 0;
+                        }
+                    }
+                }
+            )
+        );
+        scene.onBeforeRenderObservable.add(() => {
+            health_g.sourceLeft = 440 - health;
+        })
+    }
 }
