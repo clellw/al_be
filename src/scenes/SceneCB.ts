@@ -76,11 +76,9 @@ export class SceneCB {
         playerCollider.isVisible = true;
         playerCollider.material = new StandardMaterial('playerMaterial', scene);
         playerCollider.material.wireframe = true;
-        playerCollider.checkCollisions = true;
-        // Use ellipsoid collisions for smoother contact; align bottom of ellipsoid to feet
-        playerCollider.ellipsoid = new Vector3(colliderWidth/2, colliderHeight/2, colliderDepth/2);
-        playerCollider.ellipsoidOffset = new Vector3(0, 0, 0);
+        // No engine collisions: we resolve collisions manually with AABB
         playerCollider.position = lyrina.position.clone();
+
         const fixedCameraY = sideCamera.position.y;
         scene.activeCamera = sideCamera;
         const attackCollider =  MeshBuilder.CreateBox("attackCollider", {width: colliderHeight-0.03, height: colliderWidth+0.04, depth: colliderDepth}, scene);
@@ -134,9 +132,8 @@ export class SceneCB {
         let isGrounded = false;
         let isLanded = false;
         let falling=false;
-        let prevY = playerCollider.position.y;
-        let actualDeltaY = playerCollider.position.y - prevY;
         let isAttacking = false;
+        const collidables: Mesh[] = [];
         scene.onBeforeRenderObservable.add(()=>{
             if(playerCollider.intersectsMesh(sattackCollider, false) && sattackCollider.checkCollisions) {
                 lyrina.playAnimation(24, 24, false, 500, () => {  
@@ -178,21 +175,47 @@ export class SceneCB {
 
             // Apply vertical physics (gravity affects verticalVelocity)
             verticalVelocity -= gravity;
-            prevY = playerCollider.position.y;
-            playerCollider.moveWithCollisions(new Vector3(0, verticalVelocity, 0));
-            actualDeltaY = playerCollider.position.y - prevY;
+            const dy = verticalVelocity;
+            playerCollider.position.y += dy;
 
-            // Grounded detection: if moving down but blocked, snap to ground and zero vertical
-            if (verticalVelocity < 0 && actualDeltaY > verticalVelocity * 0.5) {
-                isGrounded = true;
-                if(verticalVelocity < -0.005) isLanded = true;
-                verticalVelocity = 0;
-            } else if (verticalVelocity > 0 && actualDeltaY < verticalVelocity * 0.5) {
-                // Hit ceiling: stop upward motion
-                verticalVelocity = 0;
-            } else {
+            // AABB collision resolution against all solid obstacles
+            if (collidables.length === 0) {
+                const block = scene.getMeshByName('block') as Mesh;
+                const platform = scene.getMeshByName('platform') as Mesh;
+                if (block) collidables.push(block);
+                if (platform) collidables.push(platform);
+            }
+            let hitObstacle = false;
+            for (const obstacle of collidables) {
+                const oBB = obstacle.getBoundingInfo().boundingBox;
+                const pBB = playerCollider.getBoundingInfo().boundingBox;
+                const obstacleTop = oBB.maximumWorld.y;
+                const obstacleBottom = oBB.minimumWorld.y;
+                const obstacleLeft = oBB.minimumWorld.x;
+                const obstacleRight = oBB.maximumWorld.x;
+                const playerHalfY = pBB.extendSizeWorld.y;
+                const overlapsX = pBB.maximumWorld.x >= obstacleLeft && pBB.minimumWorld.x <= obstacleRight;
+
+                if (dy <= 0 && overlapsX && pBB.minimumWorld.y <= obstacleTop && pBB.maximumWorld.y >= obstacleTop) {
+                    playerCollider.position.y = obstacleTop + playerHalfY;
+                    playerCollider.computeWorldMatrix(true);
+                    if (verticalVelocity < -0.005) isLanded = true;
+                    verticalVelocity = 0;
+                    isGrounded = true;
+                    falling = false;
+                    hitObstacle = true;
+                    break;
+                } else if (dy > 0 && overlapsX && pBB.maximumWorld.y >= obstacleBottom && pBB.minimumWorld.y <= obstacleBottom) {
+                    playerCollider.position.y = obstacleBottom - playerHalfY;
+                    playerCollider.computeWorldMatrix(true);
+                    verticalVelocity = 0;
+                    isGrounded = false;
+                    hitObstacle = true;
+                    break;
+                }
+            }
+            if (!hitObstacle) {
                 isGrounded = false;
-                falling = false;
             }
             
             if(keyStatus.q||keyStatus.s){
@@ -202,14 +225,38 @@ export class SceneCB {
                 }
                 if(keyStatus.s && !keyStatus.q){
                     lyrina.invertU = false;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    const prevX = playerCollider.position.x;
+                    playerCollider.position.x += acceleration;
+                    for (const obs of collidables) {
+                        const oBB = obs.getBoundingInfo().boundingBox;
+                        const pBB = playerCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.005;
+                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                            playerCollider.position.x = prevX;
+                            acceleration = 0;
+                            break;
+                        }
+                    }
                     if(acceleration>-speed){
                         acceleration-=0.004;
                     }
                 }
                 else if(keyStatus.q ){
                     lyrina.invertU = true;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    const prevX = playerCollider.position.x;
+                    playerCollider.position.x += acceleration;
+                    for (const obs of collidables) {
+                        const oBB = obs.getBoundingInfo().boundingBox;
+                        const pBB = playerCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.005;
+                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                            playerCollider.position.x = prevX;
+                            acceleration = 0;
+                            break;
+                        }
+                    }
                     if(acceleration<speed){
                         acceleration+=0.004;
                     }
@@ -221,11 +268,35 @@ export class SceneCB {
                 }
                 else if(acceleration>0){
                     acceleration-=0.008;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    const prevX = playerCollider.position.x;
+                    playerCollider.position.x += acceleration;
+                    for (const obs of collidables) {
+                        const oBB = obs.getBoundingInfo().boundingBox;
+                        const pBB = playerCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.005;
+                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                            playerCollider.position.x = prevX;
+                            acceleration = 0;
+                            break;
+                        }
+                    }
                 }
                 else if(acceleration<0){
                     acceleration+=0.008;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    const prevX = playerCollider.position.x;
+                    playerCollider.position.x += acceleration;
+                    for (const obs of collidables) {
+                        const oBB = obs.getBoundingInfo().boundingBox;
+                        const pBB = playerCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.005;
+                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                            playerCollider.position.x = prevX;
+                            acceleration = 0;
+                            break;
+                        }
+                    }
                 }
                 if(acceleration==0 && isGrounded){
                     if(!newAnim)lyrina.playAnimation(0,7,true,100);
@@ -397,7 +468,11 @@ export class SceneCB {
         const ground = MeshBuilder.CreateBox('block', {width: 10, height: 0.1, depth: 0.5}, this.scene);
         ground.position = new Vector3(0,-0.18,0);
         ground.checkCollisions = true;
-        ground.isVisible = false;
+        ground.isVisible = true;
+
+        const groundMaterial = new StandardMaterial("groundMaterial", scene);
+        groundMaterial.wireframe = true;
+        ground.material = groundMaterial;
         const spriteManager = new SpriteManager(
             "tilesManager",
             "./sprites/grass_m.png",
@@ -415,6 +490,13 @@ export class SceneCB {
             tile.position.z = -0.01;
             tile.cellIndex = 0; // choose tile from sprite sheet
         }
+
+        // Test platform above the ground
+        const platform = MeshBuilder.CreateBox('platform', {width: 2, height: 0.4, depth: 0.5}, this.scene);
+        platform.position = new Vector3(0, 0.35, 0);
+        const platformMaterial = new StandardMaterial("platformMaterial", scene);
+        platformMaterial.wireframe = true;
+        platform.material = platformMaterial;
 
         const skybox = Mesh.CreateBox("BackgroundSkybox", 500, scene, undefined, Mesh.BACKSIDE);
     
