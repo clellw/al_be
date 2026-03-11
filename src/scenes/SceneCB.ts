@@ -227,10 +227,11 @@ export class SceneCB {
                     lyrina.invertU = false;
                     const prevX = playerCollider.position.x;
                     playerCollider.position.x += acceleration;
+                    playerCollider.computeWorldMatrix(true);
                     for (const obs of collidables) {
                         const oBB = obs.getBoundingInfo().boundingBox;
                         const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.005;
+                        const eps = 0.001;                            //a augmenter (potentiellement pour ajouter de la permissivité dans les collisions horizontales, pour éviter que le joueur se bloque sur des petits détails du décor)
                         if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
                             pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
                             playerCollider.position.x = prevX;
@@ -246,10 +247,11 @@ export class SceneCB {
                     lyrina.invertU = true;
                     const prevX = playerCollider.position.x;
                     playerCollider.position.x += acceleration;
+                    playerCollider.computeWorldMatrix(true);
                     for (const obs of collidables) {
                         const oBB = obs.getBoundingInfo().boundingBox;
                         const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.005;
+                        const eps = 0.001;
                         if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
                             pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
                             playerCollider.position.x = prevX;
@@ -270,10 +272,11 @@ export class SceneCB {
                     acceleration-=0.008;
                     const prevX = playerCollider.position.x;
                     playerCollider.position.x += acceleration;
+                    playerCollider.computeWorldMatrix(true);
                     for (const obs of collidables) {
                         const oBB = obs.getBoundingInfo().boundingBox;
                         const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.005;
+                        const eps = 0.001;
                         if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
                             pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
                             playerCollider.position.x = prevX;
@@ -286,10 +289,11 @@ export class SceneCB {
                     acceleration+=0.008;
                     const prevX = playerCollider.position.x;
                     playerCollider.position.x += acceleration;
+                    playerCollider.computeWorldMatrix(true);
                     for (const obs of collidables) {
                         const oBB = obs.getBoundingInfo().boundingBox;
                         const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.005;
+                        const eps = 0.001;
                         if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
                             pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
                             playerCollider.position.x = prevX;
