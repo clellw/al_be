@@ -144,183 +144,185 @@ export class SceneCB {
                 playerCollider.position.x -= 0.1;
             }
             if(lyrina.cellIndex != 24) {
-            if (keyStatus.z && !isAttacking) {
-                attackCollider.checkCollisions = true;
-                if(isGrounded)
-                    lyrina.playAnimation(18,20,false,170,() => {
-                        isAttacking = false;
-                        newAnim = true;
-                    });
-                else
-                    lyrina.playAnimation(21,23,false,170,() => {
-                        isAttacking = false;
-                        newAnim = true;
-                    });
-                isAttacking = true;
-            }
-            // Jump input: start jump only if grounded
-            if(!isAttacking) {
-            if (keyStatus[' '] && isGrounded) {
-                verticalVelocity = jumpStrength;
-                isGrounded = false;
-                lyrina.playAnimation(14,15,true,120);
-                newAnim = true;
-            }
+                if (keyStatus.z && !isAttacking) {
+                    attackCollider.checkCollisions = true;
+                    if(isGrounded)
+                        lyrina.playAnimation(18,20,false,170,() => {
+                            isAttacking = false;
+                            newAnim = true;
+                        });
+                    else
+                        lyrina.playAnimation(21,23,false,170,() => {
+                            isAttacking = false;
+                            newAnim = true;
+                        });
+                    isAttacking = true;
+                }
 
-            if(!isGrounded && verticalVelocity <0 && !falling){
-                lyrina.playAnimation(16,17,true,120);
-                falling = true;
-                newAnim = true;
-            }
-
-            // Populate collidables once
-            if (collidables.length === 0) {
-                const block = scene.getMeshByName('block') as Mesh;
-                const platform = scene.getMeshByName('platform') as Mesh;
-                if (block) collidables.push(block);
-                if (platform) collidables.push(platform);
-            }
-
-            // === HORIZONTAL MOVEMENT first (prevents corner-sliding) ===
-            if(keyStatus.q||keyStatus.s){
-                if(newAnim && isGrounded) {
-                    lyrina.playAnimation(9, 13, true, 120);
-                    newAnim = false
-                }
-                if(keyStatus.s && !keyStatus.q){
-                    lyrina.invertU = false;
-                    const prevX = playerCollider.position.x;
-                    playerCollider.position.x += acceleration;
-                    playerCollider.computeWorldMatrix(true);
-                    for (const obs of collidables) {
-                        const oBB = obs.getBoundingInfo().boundingBox;
-                        const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.001;
-                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
-                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
-                            playerCollider.position.x = prevX;
-                            playerCollider.computeWorldMatrix(true);
-                            acceleration = 0;
-                            break;
-                        }
-                    }
-                    if(acceleration>-speed){
-                        acceleration-=0.004;
-                    }
-                }
-                else if(keyStatus.q ){
-                    lyrina.invertU = true;
-                    const prevX = playerCollider.position.x;
-                    playerCollider.position.x += acceleration;
-                    playerCollider.computeWorldMatrix(true);
-                    for (const obs of collidables) {
-                        const oBB = obs.getBoundingInfo().boundingBox;
-                        const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.001;
-                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
-                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
-                            playerCollider.position.x = prevX;
-                            playerCollider.computeWorldMatrix(true);
-                            acceleration = 0;
-                            break;
-                        }
-                    }
-                    if(acceleration<speed){
-                        acceleration+=0.004;
-                    }
-                }
-            }
-            else{
-                if(Math.abs(acceleration)<0.006){
-                    acceleration=0;
-                }
-                else if(acceleration>0){
-                    acceleration-=0.008;
-                    const prevX = playerCollider.position.x;
-                    playerCollider.position.x += acceleration;
-                    playerCollider.computeWorldMatrix(true);
-                    for (const obs of collidables) {
-                        const oBB = obs.getBoundingInfo().boundingBox;
-                        const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.001;
-                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
-                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
-                            playerCollider.position.x = prevX;
-                            playerCollider.computeWorldMatrix(true);
-                            acceleration = 0;
-                            break;
-                        }
-                    }
-                }
-                else if(acceleration<0){
-                    acceleration+=0.008;
-                    const prevX = playerCollider.position.x;
-                    playerCollider.position.x += acceleration;
-                    playerCollider.computeWorldMatrix(true);
-                    for (const obs of collidables) {
-                        const oBB = obs.getBoundingInfo().boundingBox;
-                        const pBB = playerCollider.getBoundingInfo().boundingBox;
-                        const eps = 0.001;
-                        if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
-                            pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
-                            playerCollider.position.x = prevX;
-                            playerCollider.computeWorldMatrix(true);
-                            acceleration = 0;
-                            break;
-                        }
-                    }
-                }
-                if(acceleration==0 && isGrounded){
-                    if(!newAnim)lyrina.playAnimation(0,7,true,100);
-                    newAnim = true;
-                }
-                if(verticalVelocity==0 && isLanded){
-                    lyrina.playAnimation(0,7,true,100);
-                    newAnim = true;
-                    isLanded = false;
-                }
-            }
-
-            // === VERTICAL PHYSICS after horizontal (prevents corner-sliding) ===
-            verticalVelocity -= gravity;
-            const dy = verticalVelocity;
-            playerCollider.position.y += dy;
-            playerCollider.computeWorldMatrix(true);
-
-            let hitObstacle = false;
-            for (const obstacle of collidables) {
-                const oBB = obstacle.getBoundingInfo().boundingBox;
-                const pBB = playerCollider.getBoundingInfo().boundingBox;
-                const obstacleTop = oBB.maximumWorld.y;
-                const obstacleBottom = oBB.minimumWorld.y;
-                const obstacleLeft = oBB.minimumWorld.x;
-                const obstacleRight = oBB.maximumWorld.x;
-                const playerHalfY = pBB.extendSizeWorld.y;
-                const overlapsX = pBB.maximumWorld.x >= obstacleLeft && pBB.minimumWorld.x <= obstacleRight;
-
-                if (dy <= 0 && overlapsX && pBB.minimumWorld.y <= obstacleTop && pBB.maximumWorld.y >= obstacleTop) {
-                    playerCollider.position.y = obstacleTop + playerHalfY;
-                    playerCollider.computeWorldMatrix(true);
-                    if (verticalVelocity < -0.005) isLanded = true;
-                    verticalVelocity = 0;
-                    isGrounded = true;
-                    falling = false;
-                    hitObstacle = true;
-                    break;
-                } else if (dy > 0 && overlapsX && pBB.maximumWorld.y >= obstacleBottom && pBB.minimumWorld.y <= obstacleBottom) {
-                    playerCollider.position.y = obstacleBottom - playerHalfY;
-                    playerCollider.computeWorldMatrix(true);
-                    verticalVelocity = 0;
+                // Jump input: start jump only if grounded (pas de nouveau saut pendant une attaque)
+                if (!isAttacking && keyStatus[' '] && isGrounded) {
+                    verticalVelocity = jumpStrength;
                     isGrounded = false;
-                    hitObstacle = true;
-                    break;
+                    lyrina.playAnimation(14,15,true,120);
+                    newAnim = true;
+                }
+
+                // Animation de chute uniquement si on n'est pas en train d'attaquer
+                if (!isAttacking && !isGrounded && verticalVelocity < 0 && !falling){
+                    lyrina.playAnimation(16,17,true,120);
+                    falling = true;
+                    newAnim = true;
+                }
+
+                // Populate collidables once
+                if (collidables.length === 0) {
+                    const block = scene.getMeshByName('block') as Mesh;
+                    const platform = scene.getMeshByName('platform') as Mesh;
+                    if (block) collidables.push(block);
+                    if (platform) collidables.push(platform);
+                }
+
+                // === HORIZONTAL MOVEMENT first (prevents corner-sliding) ===
+                // Pendant une attaque (isAttacking == true), on ignore q et s
+                // mais on laisse la décélération/friction agir dans le else.
+                if(!isAttacking && (keyStatus.q||keyStatus.s)){
+                    if(!isAttacking && newAnim && isGrounded) {
+                        lyrina.playAnimation(9, 13, true, 120);
+                        newAnim = false
+                    }
+                    if(keyStatus.s && !keyStatus.q){
+                        lyrina.invertU = false;
+                        const prevX = playerCollider.position.x;
+                        playerCollider.position.x += acceleration;
+                        playerCollider.computeWorldMatrix(true);
+                        for (const obs of collidables) {
+                            const oBB = obs.getBoundingInfo().boundingBox;
+                            const pBB = playerCollider.getBoundingInfo().boundingBox;
+                            const eps = 0.001;
+                            if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                                pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                                playerCollider.position.x = prevX;
+                                playerCollider.computeWorldMatrix(true);
+                                acceleration = 0;
+                                break;
+                            }
+                        }
+                        if(acceleration>-speed){
+                            acceleration-=0.004;
+                        }
+                    }
+                    else if(keyStatus.q ){
+                        lyrina.invertU = true;
+                        const prevX = playerCollider.position.x;
+                        playerCollider.position.x += acceleration;
+                        playerCollider.computeWorldMatrix(true);
+                        for (const obs of collidables) {
+                            const oBB = obs.getBoundingInfo().boundingBox;
+                            const pBB = playerCollider.getBoundingInfo().boundingBox;
+                            const eps = 0.001;
+                            if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                                pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                                playerCollider.position.x = prevX;
+                                playerCollider.computeWorldMatrix(true);
+                                acceleration = 0;
+                                break;
+                            }
+                        }
+                        if(acceleration<speed){
+                            acceleration+=0.004;
+                        }
+                    }
+                }
+                else{
+                    if(Math.abs(acceleration)<0.006){
+                        acceleration=0;
+                    }
+                    else if(acceleration>0){
+                        acceleration-=0.008;
+                        const prevX = playerCollider.position.x;
+                        playerCollider.position.x += acceleration;
+                        playerCollider.computeWorldMatrix(true);
+                        for (const obs of collidables) {
+                            const oBB = obs.getBoundingInfo().boundingBox;
+                            const pBB = playerCollider.getBoundingInfo().boundingBox;
+                            const eps = 0.001;
+                            if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                                pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                                playerCollider.position.x = prevX;
+                                playerCollider.computeWorldMatrix(true);
+                                acceleration = 0;
+                                break;
+                            }
+                        }
+                    }
+                    else if(acceleration<0){
+                        acceleration+=0.008;
+                        const prevX = playerCollider.position.x;
+                        playerCollider.position.x += acceleration;
+                        playerCollider.computeWorldMatrix(true);
+                        for (const obs of collidables) {
+                            const oBB = obs.getBoundingInfo().boundingBox;
+                            const pBB = playerCollider.getBoundingInfo().boundingBox;
+                            const eps = 0.001;
+                            if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
+                                pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
+                                playerCollider.position.x = prevX;
+                                playerCollider.computeWorldMatrix(true);
+                                acceleration = 0;
+                                break;
+                            }
+                        }
+                    }
+                    if(!isAttacking && acceleration==0 && isGrounded){
+                        if(!newAnim)lyrina.playAnimation(0,7,true,100);
+                        newAnim = true;
+                    }
+                    if(!isAttacking && verticalVelocity==0 && isLanded){
+                        lyrina.playAnimation(0,7,true,100);
+                        newAnim = true;
+                        isLanded = false;
+                    }
+                }
+
+                // === VERTICAL PHYSICS after horizontal (prevents corner-sliding) ===
+                verticalVelocity -= gravity;
+                const dy = verticalVelocity;
+                playerCollider.position.y += dy;
+                playerCollider.computeWorldMatrix(true);
+
+                let hitObstacle = false;
+                for (const obstacle of collidables) {
+                    const oBB = obstacle.getBoundingInfo().boundingBox;
+                    const pBB = playerCollider.getBoundingInfo().boundingBox;
+                    const obstacleTop = oBB.maximumWorld.y;
+                    const obstacleBottom = oBB.minimumWorld.y;
+                    const obstacleLeft = oBB.minimumWorld.x;
+                    const obstacleRight = oBB.maximumWorld.x;
+                    const playerHalfY = pBB.extendSizeWorld.y;
+                    const overlapsX = pBB.maximumWorld.x >= obstacleLeft && pBB.minimumWorld.x <= obstacleRight;
+
+                    if (dy <= 0 && overlapsX && pBB.minimumWorld.y <= obstacleTop && pBB.maximumWorld.y >= obstacleTop) {
+                        playerCollider.position.y = obstacleTop + playerHalfY;
+                        playerCollider.computeWorldMatrix(true);
+                        if (verticalVelocity < -0.005) isLanded = true;
+                        verticalVelocity = 0;
+                        isGrounded = true;
+                        falling = false;
+                        hitObstacle = true;
+                        break;
+                    } else if (dy > 0 && overlapsX && pBB.maximumWorld.y >= obstacleBottom && pBB.minimumWorld.y <= obstacleBottom) {
+                        playerCollider.position.y = obstacleBottom - playerHalfY;
+                        playerCollider.computeWorldMatrix(true);
+                        verticalVelocity = 0;
+                        isGrounded = false;
+                        hitObstacle = true;
+                        break;
+                    }
+                }
+                if (!hitObstacle) {
+                    isGrounded = false;
                 }
             }
-            if (!hitObstacle) {
-                isGrounded = false;
-            }
-        }
-    }
             lyrina.position.copyFrom(playerCollider.position);
             sideCamera.position.x = playerCollider.position.x;
             attackCollider.position.copyFrom(lyrina.position);
