@@ -1,6 +1,6 @@
 import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
 
-export class Obstacles {
+export class Obstaclesflying {
     public name: string;
     public lemesh: Mesh;
 
@@ -109,10 +109,10 @@ export class Obstacles {
                 if (heightincubes === 1) {
                     // CAS 1 : une seule ligne flottante
                     if (isLeft) {
-                        manager = spriteManagergrass_f_e;
+                        manager = spriteManagergrass_f_c;
                     } else if (isRight) {
-                        manager = spriteManagergrass_f_e;
-                        invertU = true;
+                        manager = spriteManagergrass_f_c;
+                        invertU = true; // extrémité droite en miroir
                     } else {
                         manager = spriteManagergrass_f_m;
                     }
@@ -129,12 +129,12 @@ export class Obstacles {
                             manager = spriteManagergrass_f_m;
                         }
                     } else {
-                        // lignes intérieures : ground_e sur les bords, ground_m au centre
+                        // ligne du bas : sol apparent
                         if (isLeft) {
-                            manager = spriteManagerground_e;
+                            manager = spriteManagerground_c;
                         } else if (isRight) {
-                            manager = spriteManagerground_e;
-                            invertU = true; // bord droit miroir
+                            manager = spriteManagerground_c;
+                            invertU = true;
                         } else {
                             manager = spriteManagerground_m;
                         }
@@ -152,12 +152,12 @@ export class Obstacles {
                             manager = spriteManagergrass_f_m;
                         }
                     } else if (isBottomRow) {
-                        // lignes intérieures : ground_e sur les bords, ground_m au centre
+                        // ligne du bas : comme le cas 2
                         if (isLeft) {
-                            manager = spriteManagerground_e;
+                            manager = spriteManagerground_c;
                         } else if (isRight) {
-                            manager = spriteManagerground_e;
-                            invertU = true; // bord droit miroir
+                            manager = spriteManagerground_c;
+                            invertU = true;
                         } else {
                             manager = spriteManagerground_m;
                         }

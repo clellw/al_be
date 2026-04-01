@@ -4,6 +4,7 @@ import { Slime } from "./Slime";
 import { Platforme } from "./Platforme";
 import { Ground } from "./Ground";
 import { Obstacles } from "./Obstacles";
+import { Obstaclesflying } from "./Obstaclesflying";
 export class SceneCB {
     
     scene: Scene;
@@ -788,7 +789,19 @@ export class SceneCB {
         const ground3 = new Ground("block3", this.scene, new Vector3(-22, -0.18, 0), 68);
         const ground4 = new Ground("block4", this.scene, new Vector3(7, -0.18, 0), 20);
 
-        //const obstacle1 = new Obstacles("obstacle1", this.scene, new Vector3(0, -0.18, 0), 10);
+        const obstaclevolant = new Obstaclesflying("obstaclevolant1", this.scene, new Vector3(0, 0.5, 0), 3, 5);
+        const obstaclevolant2 = new Obstaclesflying("obstaclevolant2", this.scene, new Vector3(-0.5, 0.5, 0), 3, 5);
+        const obstaclevolant3 = new Obstaclesflying("obstaclevolant3", this.scene, new Vector3(-1, 0.5, 0), 3, 5);
+        const obstaclevolant4 = new Obstaclesflying("obstaclevolant4", this.scene, new Vector3(-3, 0.5, 0), 10, 1);
+        const obstaclevolant5 = new Obstaclesflying("obstaclevolant5", this.scene, new Vector3(-5.5, 0.5, 0), 10, 2);
+        const obstaclevolant6 = new Obstaclesflying("obstaclevolant6", this.scene, new Vector3(-10, 0.5, 0), 10, 5);
+
+        const obstacle = new Obstacles("obstacle1", this.scene, new Vector3(-12, 0.5, 0), 3, 1);
+        const obstacle2 = new Obstacles("obstacle2", this.scene, new Vector3(-12.5, 0.5, 0), 3, 2);
+        const obstacle3 = new Obstacles("obstacle3", this.scene, new Vector3(-13, 0.5, 0), 3, 3);
+        const obstacle4 = new Obstacles("obstacle4", this.scene, new Vector3(-16, 0.5, 0), 10, 1);
+        const obstacle5 = new Obstacles("obstacle5", this.scene, new Vector3(-20, 0.5, 0), 10, 2);
+        const obstacle6 = new Obstacles("obstacle6", this.scene, new Vector3(-24, 0.5, 0), 10, 5);
 
         const platform1 = new Platforme("platform1", this.scene, new Vector3(-2, 0.35, 0));
 
