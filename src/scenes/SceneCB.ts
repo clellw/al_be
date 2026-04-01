@@ -1,7 +1,9 @@
 import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
 import * as GUI from '@babylonjs/gui'
-import { Objettest } from "./Objettest";
 import { Slime } from "./Slime";
+import { Platforme } from "./Platforme";
+import { Ground } from "./Ground";
+import { Obstacles } from "./Obstacles";
 export class SceneCB {
     
     scene: Scene;
@@ -145,6 +147,7 @@ export class SceneCB {
         const slime3 = new Slime('slime3', scene, new Vector3(2, 2, 0));
         const slime4 = new Slime('slime4', scene, new Vector3(2, 5, 0));
         const slimes = [slime1, slime2, slime3,slime4];
+        let lastHitSlime: Slime | null = null;
 
         function slimeboucle(slime: Slime): void {
             if(slime.slimeCollider.intersectsMesh(attackCollider, false) && attackCollider.checkCollisions) {
@@ -371,6 +374,7 @@ export class SceneCB {
             }
         }
 
+        //BOUCLE PRINCIPALE JOUEUR
         scene.onBeforeRenderObservable.add(()=>{
             // décrémente l'invincibilité si active et fait clignoter le joueur
             if (invincibilityFrames > 0) {
@@ -398,6 +402,7 @@ export class SceneCB {
                         knockbackVelocityX = (dx >= 0) ? 0.04 : -0.04;
                         // 120 frames d'invincibilité après avoir été touché
                         invincibilityFrames = 120;
+                        lastHitSlime = slime;
                     }
                 }
             }
@@ -405,9 +410,17 @@ export class SceneCB {
             // Populate collidables once (utilisé aussi pendant le knockback)
             if (collidables.length === 0) {
                 const block = scene.getMeshByName('block') as Mesh;
+                const block2 = scene.getMeshByName('block2') as Mesh;
+                const block3 = scene.getMeshByName('block3') as Mesh;
+                const block4 = scene.getMeshByName('block4') as Mesh;
                 const platform = scene.getMeshByName('platform') as Mesh;
+                const platform1 = scene.getMeshByName('platform1') as Mesh;
+                if (block2) collidables.push(block2);
                 if (block) collidables.push(block);
+                if (block3) collidables.push(block3);
+                if (block4) collidables.push(block4);
                 if (platform) collidables.push(platform);
+                if (platform1) collidables.push(platform1);
             }
 
             // Knockback animé du joueur (comme les slimes)
@@ -436,6 +449,10 @@ export class SceneCB {
                     const eps = 0.001;
                     const overlappingSlimes: Slime[] = [];
                     for (const slime of slimes) {
+                        // ici ignorer le slime qui a provoqué la collision
+                        if (slime === lastHitSlime) {
+                            continue;
+                        }
                         const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
                         const overlapX = pBB.maximumWorld.x > sBB.minimumWorld.x + eps && pBB.minimumWorld.x < sBB.maximumWorld.x - eps;
                         const overlapY = pBB.maximumWorld.y > sBB.minimumWorld.y + eps && pBB.minimumWorld.y < sBB.maximumWorld.y - eps;
@@ -471,6 +488,7 @@ export class SceneCB {
                 if (Math.abs(knockbackVelocityX) < 0.005) {
                     knockbackVelocityX = 0;
                     isKnockback = false;
+                    lastHitSlime = null;
                 }
             }
 
@@ -766,7 +784,13 @@ export class SceneCB {
         platformMaterial.wireframe = true;
         platform.material = platformMaterial;
 
-        const platformclass = new Objettest("platform", scene);
+        const ground2 = new Ground("block2", this.scene, new Vector3(-11, -0.18, 0), 68);
+        const ground3 = new Ground("block3", this.scene, new Vector3(-22, -0.18, 0), 68);
+        const ground4 = new Ground("block4", this.scene, new Vector3(7, -0.18, 0), 20);
+
+        //const obstacle1 = new Obstacles("obstacle1", this.scene, new Vector3(0, -0.18, 0), 10);
+
+        const platform1 = new Platforme("platform1", this.scene, new Vector3(-2, 0.35, 0));
 
         const skybox = Mesh.CreateBox("BackgroundSkybox", 500, scene, undefined, Mesh.BACKSIDE);
     
