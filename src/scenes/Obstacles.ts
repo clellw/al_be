@@ -4,7 +4,7 @@ export class Obstacles {
     public name: string;
     public lemesh: Mesh;
 
-    constructor(name: string, scene: Scene, initialPosition: Vector3, widthincubes: number, heightincubes: number) {
+    constructor(name: string, scene: Scene, initialPosition: Vector3, widthincubes: number, heightincubes: number,visible:boolean) {
         //a refaire de la meme maniere que ceului de ground
         
         
@@ -33,7 +33,7 @@ export class Obstacles {
         ground.position = initialPosition;
 
         ground.checkCollisions = true;
-        ground.isVisible = true;
+        ground.isVisible = visible;
 
         const groundMaterial = new StandardMaterial("groundMaterial", scene);
         groundMaterial.wireframe = true;

@@ -1,6 +1,6 @@
 import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
 
-export class Slime {
+export class Frog {
     public id: string;
     public spriteManager: SpriteManager;
     public attackCollider: Mesh;
@@ -21,12 +21,12 @@ export class Slime {
     public degat:number;
     public isDead: boolean;
 
-    constructor(id: string, scene: Scene, initialPosition: Vector3) {
+    constructor(id: string, scene: Scene, initialPosition: Vector3,visible:boolean) {
         const SlimeManager = new SpriteManager(
             'SlimeManager',
-            './sprites/spritesheet_e1.png',
+            './sprites/frog.png',
             1,
-            256,
+            { width: 192, height: 192 },
             scene
         );
 
@@ -51,14 +51,14 @@ export class Slime {
         const verticalVelocity = 0;
         const IsGrounded = true;
         const slimeHealth = 20;
-        const waittime = 20;
+        const waittime = 10;
         const actionTime = 0;
         const dir = 1;
-        const speed = 0.004;
+        const speed = 0.005;
         const isAttacking = false;
         const pastFirstCycle = false;
         const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderHeight-0.01, height: scolliderWidth-0.02, depth: scolliderDepth}, scene);
-        sattackCollider.isVisible = true;
+        sattackCollider.isVisible = visible;
         sattackCollider.material = new StandardMaterial('playerMaterial', scene);
         sattackCollider.material.wireframe = true;
         sattackCollider.checkCollisions = false;
@@ -79,8 +79,7 @@ export class Slime {
         this.pastFirstCycle = pastFirstCycle;
         this.attackCollider = sattackCollider;
         this.id = id;
-        this.degat = 20;
+        this.degat = 40;
         this.isDead = false;
-
     }
 }

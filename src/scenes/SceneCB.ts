@@ -1,16 +1,20 @@
-import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
+import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3, PointerEventTypes, Matrix} from "@babylonjs/core"
 import * as GUI from '@babylonjs/gui'
 import { Slime } from "./Slime";
 import { Platforme } from "./Platforme";
 import { Ground } from "./Ground";
 import { Obstacles } from "./Obstacles";
 import { Obstaclesflying } from "./Obstaclesflying";
+import { Slimerouge } from "./Slimerouge";
+import { Guepe } from "./Guepe";
 export class SceneCB {
     
     scene: Scene;
     engine: Engine;
+    devpoweractive: boolean;
 
     constructor(private canvas:HTMLCanvasElement){
+        this.devpoweractive = true;
         this.engine = new Engine(this.canvas, true);
         this.scene = this.CreateScene();
         //Inspector.show(this.scene, {})
@@ -45,12 +49,85 @@ export class SceneCB {
         this.CreateEnvironment(scene);
         this.CreateDialog(scene);
 
+        // --- ÉDITION D'OBSTACLES VOLANTS À LA SOURIS ---
+        // Permet de cliquer sur un obstacle volant (ex: obstaclevolant2),
+        // de le déplacer à la souris et d'afficher dans la console les
+        // coordonnées Vector3 à utiliser dans le code.
+        let draggedObstacle: Mesh | null = null;
+        let draggedObstacleLastPos: Vector3 | null = null;
+
+        scene.onPointerObservable.add((pointerInfo) => {
+            if (this.devpoweractive){
+                switch (pointerInfo.type) {
+                    case PointerEventTypes.POINTERDOWN: {
+                        const pick = pointerInfo.pickInfo;
+                        if (pick && pick.hit && pick.pickedMesh) {
+                            const mesh = pick.pickedMesh as Mesh;
+                            // On ne déplace que les meshes dont le nom commence par "obstaclevolant"
+                            if (mesh.name.startsWith("obstacle")||mesh.name.startsWith("platform")) {
+                                draggedObstacle = mesh;
+                                draggedObstacleLastPos = mesh.position.clone();
+                            }
+                        }
+                        break;
+                    }
+                    case PointerEventTypes.POINTERMOVE: {
+                        if (draggedObstacle && scene.activeCamera) {
+                            // Ray depuis la souris
+                            const ray = scene.createPickingRay(
+                                scene.pointerX,
+                                scene.pointerY,
+                                Matrix.Identity(),
+                                scene.activeCamera as Camera
+                            );
+                            const dirZ = ray.direction.z;
+                            // On projette le rayon sur le plan z = position.z de l'obstacle
+                            if (Math.abs(dirZ) > 1e-6) {
+                                const t = (draggedObstacle.position.z - ray.origin.z) / dirZ;
+                                if (t > 0) {
+                                    const hit = ray.origin.add(ray.direction.scale(t));
+
+                                    // déplacement du mesh
+                                    const oldPos = draggedObstacle.position.clone();
+                                    draggedObstacle.position.x = hit.x;
+                                    draggedObstacle.position.y = hit.y;
+
+                                    // déplacement des sprites associés (tiles) avec le même delta
+                                    const dx = draggedObstacle.position.x - oldPos.x;
+                                    const dy = draggedObstacle.position.y - oldPos.y;
+                                    const meta: any = (draggedObstacle as any).metadata;
+                                    if (meta && Array.isArray(meta.tiles)) {
+                                        for (const tile of meta.tiles) {
+                                            tile.position.x += dx;
+                                            tile.position.y += dy;
+                                        }
+                                    }
+
+                                    draggedObstacleLastPos = draggedObstacle.position.clone();
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case PointerEventTypes.POINTERUP: {
+                        if (draggedObstacle) {
+                            const p = draggedObstacle.position;
+                            console.log(
+                                `Nouvelle position pour ${draggedObstacle.name}: new Vector3(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`
+                            );
+                            draggedObstacle = null;
+                            draggedObstacleLastPos = null;
+                        }
+                        break;
+                    }
+                }
+            }
+        });//fin d edition
 
         return scene;
     }
 
     async CreateMainCharacter(scene:Scene): Promise<void> {
-
         //importing the sprites for the character
         const LManager = new SpriteManager(
             'LManager',
@@ -77,7 +154,7 @@ export class SceneCB {
         const colliderHeight = lyrina.size /1.71;   // close to sprite height
         const colliderDepth = 0.1;                  // thin depth for 2D side view
         const playerCollider = MeshBuilder.CreateBox("playerCollider", {width: colliderWidth, height: colliderHeight, depth: colliderDepth}, scene);
-        playerCollider.isVisible = true;
+        playerCollider.isVisible = this.devpoweractive;
         playerCollider.material = new StandardMaterial('playerMaterial', scene);
         playerCollider.material.wireframe = true;
         // No engine collisions: we resolve collisions manually with AABB
@@ -116,16 +193,16 @@ export class SceneCB {
         // Create and tweak the background material.
         const backgroundManager = new SpriteManager(
             "tilesManager",
-            "./sprites/place_holder_b.jpg",
+            "./sprites/place_holder_bnew.png",
             100,           
-            {width:961, height:501}, 
+            {width:961, height:550}, 
             scene
         );
         const background = new Sprite("background", backgroundManager);
         background.position.z = -1;
-        background.position.y = 1;
+        background.position.y = 1.1;
         background.width = 6;
-        background.height = 2.9;
+        background.height = 3;
 
         let newAnim = true;
         const speed=0.03;
@@ -147,18 +224,134 @@ export class SceneCB {
         const slime2 = new Slime('slime2', scene, new Vector3(-1, 2, 0));
         const slime3 = new Slime('slime3', scene, new Vector3(2, 2, 0));
         const slime4 = new Slime('slime4', scene, new Vector3(2, 5, 0));
-        const slimes = [slime1, slime2, slime3,slime4];
-        let lastHitSlime: Slime | null = null;
+        const slimerouge1 = new Slimerouge('slimerouge1', scene, new Vector3(-15, 0, 0));
+        const slimerouge2 = new Slimerouge('slimerouge2', scene, new Vector3(-14, 0, 0));
+        // on place la guêpe dans la zone visible près du joueur
+        const guepe1 = new Guepe('guepe1', scene, new Vector3(-1.5, 0.01, 0),this.devpoweractive);
 
+        const slimes = [slime1, slime2, slime3,slime4, slimerouge1, slimerouge2];
+        const guepes = [guepe1];
+
+        let lastHitSlime: Slime | null | Slimerouge | Guepe = null;
+
+        // Détecte s'il y a du sol "devant" un collider de slime, dans une direction donnée
+        const hasGroundAhead = (slimeCollider: Mesh, dir: number): boolean => {
+            const sBB = slimeCollider.getBoundingInfo().boundingBox;
+            const xFront = dir > 0 ? sBB.maximumWorld.x + 0.01 : sBB.minimumWorld.x - 0.01;
+            const yProbe = sBB.minimumWorld.y - 0.05;
+
+            for (const obstacle of collidables) {
+                const oBB = obstacle.getBoundingInfo().boundingBox;
+                const obstacleTop = oBB.maximumWorld.y;
+
+                const withinX = xFront >= oBB.minimumWorld.x && xFront <= oBB.maximumWorld.x;
+                const closeY = Math.abs(obstacleTop - yProbe) < 0.08;
+                if (withinX && closeY) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        function guepeboucle(guepe: Guepe): void {
+            // Si le guepe est déjà mort, on ne fait plus rien
+            if (guepe.isDead) {
+                return;
+            }
+
+            // Dégâts reçus depuis l'attaque du joueur
+            if (guepe.attackCollider.intersectsMesh(attackCollider, false) && attackCollider.checkCollisions) {
+                guepe.guepeHealth -= 2;
+                guepe.isSuffering = true;
+                // on (ré)initialise un petit timer de souffrance
+                guepe.waittime = 20;
+                // pas de frame spéciale de "hit" : on garde l'animation idle (0..5)
+                guepe.sprite.playAnimation(0, 5, true, 100);
+                guepe.actionTime = 0;
+                guepe.isAttacking = false;
+            }
+
+            // mort du guepe
+            if (guepe.guepeHealth <= 0 && !guepe.isDead) {
+                guepe.isDead = true;
+                guepe.attackCollider.checkCollisions = false;
+                guepe.sprite.dispose();
+                guepe.slimeCollider.dispose();
+                guepe.attackCollider.dispose();
+                guepes.splice(guepes.indexOf(guepe), 1);
+                return;
+            }
+
+            if (guepe.isSuffering) {
+                // faire clignoter la guepe comme le joueur pendant quelques frames
+                if (guepe.waittime > 0) {
+                    guepe.waittime--;
+                    // clignotement simple: visible 3 frames sur 6
+                    guepe.sprite.isVisible = (guepe.waittime % 6) >= 3;
+                } else {
+                    guepe.isSuffering = false;
+                    guepe.sprite.isVisible = true;
+                }
+                const prevX = guepe.slimeCollider.position.x;
+                guepe.slimeCollider.computeWorldMatrix(true);
+            } else {
+                // juste animer la guepe sans déplacement pour l'instant
+                if( !guepe.isAttacking && invincibilityFrames <= 0) {
+                    guepe.sprite.playAnimation(0, 5, false, 50, () => {  
+                        guepe.sprite.playAnimation(0, 5, true, 100);
+                    });
+                    guepe.waittime = 20;
+                    guepe.actionTime = 0;
+                    guepe.isAttacking = true;
+                }
+                if(guepe.isAttacking) {
+                    const prevX = guepe.slimeCollider.position.x;
+                    guepe.slimeCollider.computeWorldMatrix(true);
+                    if (invincibilityFrames > 0) {
+                        const sBB = guepe.slimeCollider.getBoundingInfo().boundingBox;
+                        const pBB = playerCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.0005;
+                        const overlapX = sBB.maximumWorld.x > pBB.minimumWorld.x + eps && sBB.minimumWorld.x < pBB.maximumWorld.x - eps;
+                        const overlapY = sBB.maximumWorld.y > pBB.minimumWorld.y + eps && sBB.minimumWorld.y < pBB.maximumWorld.y - eps;
+                        if (overlapX && overlapY) {
+                            guepe.slimeCollider.position.x = prevX;
+                            guepe.slimeCollider.computeWorldMatrix(true);
+                        }
+                    }
+                }
+                else{
+                    guepe.sprite.playAnimation(0, 5, true, 100);
+                }
+            }
+
+            // garder les colliders alignés avec le sprite
+            guepe.slimeCollider.position.copyFrom(guepe.sprite.position);
+            guepe.attackCollider.position.copyFrom(guepe.sprite.position);
+            guepe.attackCollider.checkCollisions = true;
+        }
         function slimeboucle(slime: Slime): void {
+            // Si le slime est déjà mort, on ne fait plus rien
+            if (slime.isDead) {
+                return;
+            }
             if(slime.slimeCollider.intersectsMesh(attackCollider, false) && attackCollider.checkCollisions) {
                 slime.slimeHealth -= 2;
+                // frame 39 = dernière case de la spritesheet rouge (4 colonnes x 10 lignes)
                 slime.sprite.playAnimation(39, 39, false, 500, () => {  
                     slime.sprite.playAnimation(0, 5, true, 100);
                     slime.waittime = 20;
                     slime.actionTime = 0;
                     slime.isAttacking = false;
                 })
+            }
+            // mort du slime vert
+            if (slime.slimeHealth <= 0 && !slime.isDead) {
+                slime.isDead = true;
+                slime.attackCollider.checkCollisions = false;
+                slime.sprite.dispose();
+                slime.slimeCollider.dispose();
+                slime.attackCollider.dispose();
+                slimes.splice(slimes.indexOf(slime), 1);
+                return;
             }
             if(slime.sprite.cellIndex == 39) {
                 const prevX = slime.slimeCollider.position.x;
@@ -253,23 +446,27 @@ export class SceneCB {
             //detectiondistance
             if(slime.sprite.cellIndex != 39) {
                 // Ne déclenche pas une nouvelle attaque si le joueur est en invincibilité
-                if(Math.abs(playerCollider.position.x) - Math.abs(slime.slimeCollider.position.x) < 0.5 && !slime.isAttacking && slime.pastFirstCycle && invincibilityFrames <= 0) {
+                // et seulement si le joueur est proche en X **et** en Y.
+                const dxGreen = Math.abs(playerCollider.position.x - slime.slimeCollider.position.x);
+                const dyGreen = Math.abs(playerCollider.position.y - slime.slimeCollider.position.y);
+                // Portée horizontale ~0.5, portée verticale plus courte (~0.25)
+                if(dxGreen < 0.6 && dyGreen < 0.3 && !slime.isAttacking && slime.pastFirstCycle && invincibilityFrames <= 0) {
                     slime.sprite.playAnimation(16, 38, false, 50, () => {  
                         slime.sprite.playAnimation(0, 5, true, 100);
                         slime.isAttacking = false;
                     });
-                    slime.waittime = 20;
+                    slime.waittime = 10;
                     slime.actionTime = 0;
                     slime.isAttacking = true;
                 }
                 if(slime.isAttacking) {
                     const prevX = slime.slimeCollider.position.x;
                     if(slime.sprite.position.x < lyrina.position.x) {
-                        slime.slimeCollider.position.x += 0.002;
+                        slime.slimeCollider.position.x += slime.speed;
                         slime.sprite.invertU = true;
                     }
                     else {
-                        slime.slimeCollider.position.x -= 0.002;
+                        slime.slimeCollider.position.x -= slime.speed;
                         slime.sprite.invertU = false;
                     }
                     slime.slimeCollider.computeWorldMatrix(true);
@@ -312,7 +509,7 @@ export class SceneCB {
                             slime.actionTime = Math.floor(Math.random() * (180 - 60 + 1)) + 60;
                             slime.sprite.playAnimation(6,15, true, 100);
                             slime.dir = Math.random();
-                            slime.speed =  Math.random() * (0.002 - 0.003) + 0.002;
+                            slime.speed =  Math.random() * (0.002 - 0.003) + 0.003;
                             console.log(slime.dir < 0.5);
                         }
                         // tentative de déplacement horizontal
@@ -357,7 +554,7 @@ export class SceneCB {
 
                         slime.actionTime--;
                         if(slime.actionTime == 0) {
-                            slime.waittime = Math.floor(Math.random() * (25 - 10 + 1)) + 10;
+                            slime.waittime = Math.floor(Math.random() * (15 - 8 + 1)) + 8;
                             slime.sprite.playAnimation(0, 5, true, 100);
                             slime.pastFirstCycle = true;
                         }
@@ -374,7 +571,260 @@ export class SceneCB {
                 slime.attackCollider.checkCollisions = false;
             }
         }
+        //BOUCLE SLIME ROUGE
+        function slimerougeboucle(slime: Slimerouge): void {
+            // Si le slime rouge est déjà mort, on ne fait plus rien
+            if (slime.isDead) {
+                slimes.splice(slimes.indexOf(slime), 1);
+                return;
+            }
+            if(slime.slimeCollider.intersectsMesh(attackCollider, false) && attackCollider.checkCollisions) {
+                slime.slimeHealth -= 2;
+                slime.sprite.playAnimation(39, 39, false, 500, () => {  
+                    slime.sprite.playAnimation(0, 5, true, 100);
+                    slime.waittime = 20;
+                    slime.actionTime = 0;
+                    slime.isAttacking = false;
+                })
+            }
+            // mort du slime rouge
+            if (slime.slimeHealth <= 0 && !slime.isDead) {
+                slime.isDead = true;
+                slime.attackCollider.checkCollisions = false;
+                slime.sprite.dispose();
+                slime.slimeCollider.dispose();
+                slime.attackCollider.dispose();
+                return;
+            }
+            if(slime.sprite.cellIndex == 39) {
+                const prevX = slime.slimeCollider.position.x;
+                if(slime.sprite.position.x < lyrina.position.x) {
+                    slime.slimeCollider.position.x -= 0.005;
+                    slime.sprite.invertU = true;
+                }
+                else {
+                    slime.slimeCollider.position.x += 0.005;
+                }
+                slime.slimeCollider.computeWorldMatrix(true);
 
+                // empêcher un slime touché de traverser les autres slimes
+                for (const other of slimes) {
+                    if (other === slime) continue;
+                    const oBB = other.slimeCollider.getBoundingInfo().boundingBox;
+                    const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                    const eps = 0.0005;
+                    const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
+                    const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
+                    if (overlapX && overlapY) {
+                        slime.slimeCollider.position.x = prevX;
+                        slime.slimeCollider.computeWorldMatrix(true);
+                        break;
+                    }
+                }
+
+            }
+
+            // === VERTICAL PHYSICS du slime (même logique que le joueur) ===
+            slime.verticalVelocity -= gravity;
+            const sdy1 = slime.verticalVelocity;
+            const prevY = slime.slimeCollider.position.y;
+            slime.slimeCollider.position.y += sdy1;
+            slime.slimeCollider.computeWorldMatrix(true);
+
+            let slime1HitObstacle = false;
+            for (const obstacle of collidables) {
+                const oBB = obstacle.getBoundingInfo().boundingBox;
+                const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                const obstacleTop = oBB.maximumWorld.y;
+                const obstacleBottom = oBB.minimumWorld.y;
+                const obstacleLeft = oBB.minimumWorld.x;
+                const obstacleRight = oBB.maximumWorld.x;
+                const slimeHalfY = sBB.extendSizeWorld.y;
+                const overlapsX = sBB.maximumWorld.x >= obstacleLeft && sBB.minimumWorld.x <= obstacleRight;
+
+                // Atterrissage sur le haut d'un obstacle
+                if (sdy1 <= 0 && overlapsX && sBB.minimumWorld.y <= obstacleTop && sBB.maximumWorld.y >= obstacleTop) {
+                    slime.slimeCollider.position.y = obstacleTop + slimeHalfY;
+                    slime.slimeCollider.computeWorldMatrix(true);
+                    slime.verticalVelocity = 0;
+                    slime.IsGrounded = true;
+                    slime1HitObstacle = true;
+                    break;
+                }
+                // Collision par le dessous (tête du slime sous une plateforme)
+                else if (sdy1 > 0 && overlapsX && sBB.maximumWorld.y >= obstacleBottom && sBB.minimumWorld.y <= obstacleBottom) {
+                    slime.slimeCollider.position.y = obstacleBottom - slimeHalfY;
+                    slime.slimeCollider.computeWorldMatrix(true);
+                    slime.verticalVelocity = 0;
+                    slime.IsGrounded = false;
+                    slime1HitObstacle = true;
+                    break;
+                }
+            }
+            if (!slime1HitObstacle) {
+                slime.IsGrounded = false;
+            }
+
+            // empêche un slime qui tombe de traverser un autre slime (collision verticale)
+            if (sdy1 <= 0) {
+                for (const other of slimes) {
+                    if (other === slime) continue;
+                    const oBB = other.slimeCollider.getBoundingInfo().boundingBox;
+                    const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                    const eps = 0.0005;
+                    const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
+                    const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
+                    if (overlapX && overlapY) {
+                        // replace le slime à son ancienne hauteur et annule la chute
+                        slime.slimeCollider.position.y = prevY;
+                        slime.slimeCollider.computeWorldMatrix(true);
+                        slime.verticalVelocity = 0;
+                        slime.IsGrounded = true;
+                        break;
+                    }
+                }
+
+            }
+            //iiiiiiiiIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+            //detectiondistance
+            if(slime.sprite.cellIndex != 39) {
+                // Ne déclenche pas une nouvelle attaque si le joueur est en invincibilité
+                // Utilise maintenant la vraie distance horizontale entre le joueur et le slime rouge
+                const dxRed = Math.abs(playerCollider.position.x - slime.slimeCollider.position.x);
+                if(dxRed < 0.4 && !slime.isAttacking && invincibilityFrames <= 0) {
+                    // la spritesheet a 40 frames (0..39). On utilise 16..38 pour l'attaque.
+                    slime.sprite.playAnimation(16, 38, false, 50, () => {  
+                        slime.sprite.playAnimation(0, 5, true, 100);
+                        slime.isAttacking = false;
+                    });
+                    slime.waittime = 10;
+                    slime.actionTime = 0;
+                    slime.isAttacking = true;
+                }
+                if(slime.isAttacking) {
+                    const prevX = slime.slimeCollider.position.x;
+                    if(slime.sprite.position.x < lyrina.position.x) {
+                        slime.slimeCollider.position.x += slime.speed;
+                        slime.sprite.invertU = true;
+                    }
+                    else {
+                        slime.slimeCollider.position.x -= slime.speed;
+                        slime.sprite.invertU = false;
+                    }
+                    slime.slimeCollider.computeWorldMatrix(true);
+
+                    // collision entre slimes pendant l'attaque
+                    for (const other of slimes) {
+                        if (other === slime) continue;
+                        const oBB = other.slimeCollider.getBoundingInfo().boundingBox;
+                        const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.0005;
+                        const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
+                        const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
+                        if (overlapX && overlapY) {
+                            slime.slimeCollider.position.x = prevX;
+                            slime.slimeCollider.computeWorldMatrix(true);
+                            break;
+                        }
+                    }
+                    // collision slime ↔ joueur pendant l'attaque
+                    // Pendant les invincibility frames du joueur, le slime ne
+                    // doit pas le traverser : on le bloque comme un mur.
+                    if (invincibilityFrames > 0) {
+                        const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                        const pBB = playerCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.005;
+                        const overlapX = sBB.maximumWorld.x > pBB.minimumWorld.x + eps && sBB.minimumWorld.x < pBB.maximumWorld.x - eps;
+                        const overlapY = sBB.maximumWorld.y > pBB.minimumWorld.y + eps && sBB.minimumWorld.y < pBB.maximumWorld.y - eps;
+                        if (overlapX && overlapY) {
+                            slime.slimeCollider.position.x = prevX;
+                            slime.slimeCollider.computeWorldMatrix(true);
+                        }
+                    }
+                }
+                else {
+                    // Déplacement continu sans hasard : la direction ne change
+                    // que si le slime est bloqué ou s'il arrive au bord du vide.
+                    // On lance l'animation de marche (6..15) si on n'est pas déjà dessus.
+                    if (slime.sprite.cellIndex < 6 || slime.sprite.cellIndex > 15) {
+                        slime.sprite.playAnimation(6, 15, true, 100);
+                    }
+
+                    // initialisation direction si nécessaire
+                    if (slime.dir === 0) {
+                        slime.dir = 1;
+                    }
+
+                    const prevX = slime.slimeCollider.position.x;
+                    slime.slimeCollider.position.x += (slime.dir > 0 ? 1 : -1) * slime.speed;
+                    slime.sprite.invertU = slime.dir > 0;
+                    slime.slimeCollider.computeWorldMatrix(true);
+
+                    let blocked = false;
+
+                    // empêche les slimes de se traverser entre eux (collision AABB)
+                    for (const other of slimes) {
+                        if (other === slime) continue;
+                        const oBB = other.slimeCollider.getBoundingInfo().boundingBox;
+                        const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.0005;
+                        const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
+                        const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
+                        if (overlapX && overlapY) {
+                            blocked = true;
+                            slime.slimeCollider.position.x = prevX;
+                            slime.slimeCollider.computeWorldMatrix(true);
+                            break;
+                        }
+                    }
+
+                    // empêche les slimes de traverser le joueur (collision AABB)
+                    {
+                        const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                        const pBB = playerCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.0005;
+                        const overlapX = sBB.maximumWorld.x > pBB.minimumWorld.x + eps && sBB.minimumWorld.x < pBB.maximumWorld.x - eps;
+                        const overlapY = sBB.maximumWorld.y > pBB.minimumWorld.y + eps && sBB.minimumWorld.y < pBB.maximumWorld.y - eps;
+                        if (overlapX && overlapY) {
+                            blocked = true;
+                            slime.slimeCollider.position.x = prevX;
+                            slime.slimeCollider.computeWorldMatrix(true);
+                        }
+                    }
+
+                    // collision avec le décor (obstacles/plateformes) pendant le déplacement
+                    for (const obstacle of collidables) {
+                        const oBB = obstacle.getBoundingInfo().boundingBox;
+                        const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
+                        const eps = 0.0005;
+                        const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
+                        const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
+                        if (overlapX && overlapY) {
+                            blocked = true;
+                            slime.slimeCollider.position.x = prevX;
+                            slime.slimeCollider.computeWorldMatrix(true);
+                            break;
+                        }
+                    }
+
+                    const groundAhead = hasGroundAhead(slime.slimeCollider, slime.dir > 0 ? 1 : -1);
+
+                    // changement de direction seulement si bloqué ou bord du vide
+                    if (blocked || !groundAhead) {
+                        slime.dir *= -1;
+                    }
+                }
+            }
+            slime.sprite.position.copyFrom(slime.slimeCollider.position);
+            slime.attackCollider.position.copyFrom(slime.sprite.position);
+            slime.sprite.position.y += 0.019;
+            if(slime.sprite.cellIndex >= 16 && slime.sprite.cellIndex <= 38) {
+                slime.attackCollider.checkCollisions = true;
+            }
+            else {
+                slime.attackCollider.checkCollisions = false;
+            }
+        }
         //BOUCLE PRINCIPALE JOUEUR
         scene.onBeforeRenderObservable.add(()=>{
             // décrémente l'invincibilité si active et fait clignoter le joueur
@@ -388,14 +838,14 @@ export class SceneCB {
             }
 
             for (const slime of slimes) {
-                if(invincibilityFrames <= 0 && playerCollider.intersectsMesh(slime.attackCollider, false) && slime.attackCollider.checkCollisions) {
+                if((invincibilityFrames <= 0 && playerCollider.intersectsMesh(slime.attackCollider, false) && slime.attackCollider.checkCollisions)||(invincibilityFrames <= 0 && playerCollider.intersectsMesh(slime.attackCollider, false) && !slime.IsGrounded)) {
                     lyrina.playAnimation(24, 24, false, 500, () => {  
                         lyrina.playAnimation(0, 5, true, 100);
                         isAttacking = false;
                         isKnockback = false;
                         knockbackVelocityX = 0;
                     })
-                    this.health -= 20;
+                    this.health -= slime.degat;
                     {
                         const dx = playerCollider.position.x - slime.slimeCollider.position.x;
                         // lance un knockback continu plutôt qu'un téléport
@@ -407,6 +857,26 @@ export class SceneCB {
                     }
                 }
             }
+            for (const guepe of guepes) {
+                if(invincibilityFrames <= 0 && playerCollider.intersectsMesh(guepe.attackCollider, false) && guepe.attackCollider.checkCollisions) {
+                    lyrina.playAnimation(24, 24, false, 500, () => {  
+                        lyrina.playAnimation(0, 5, true, 100);
+                        isAttacking = false;
+                        isKnockback = false;
+                        knockbackVelocityX = 0;
+                    })
+                    this.health -= guepe.degat;
+                    {
+                        const dx = playerCollider.position.x - guepe.slimeCollider.position.x;
+                        // lance un knockback continu plutôt qu'un téléport
+                        isKnockback = true;
+                        knockbackVelocityX = (dx >= 0) ? 0.04 : -0.04;
+                        // 120 frames d'invincibilité après avoir été touché
+                        invincibilityFrames = 120;
+                        lastHitSlime = guepe;
+                    }
+                }
+            }
 
             // Populate collidables once (utilisé aussi pendant le knockback)
             if (collidables.length === 0) {
@@ -414,14 +884,22 @@ export class SceneCB {
                 const block2 = scene.getMeshByName('block2') as Mesh;
                 const block3 = scene.getMeshByName('block3') as Mesh;
                 const block4 = scene.getMeshByName('block4') as Mesh;
-                const platform = scene.getMeshByName('platform') as Mesh;
+                //const platform = scene.getMeshByName('platform') as Mesh;
                 const platform1 = scene.getMeshByName('platform1') as Mesh;
+                const platform2 = scene.getMeshByName('platform2') as Mesh;
+                const obstaclevolant1 = scene.getMeshByName('obstaclevolant1') as Mesh;
+                const obstaclevolant2 = scene.getMeshByName('obstaclevolant2') as Mesh;
+                const obstaclevolant3 = scene.getMeshByName('obstaclevolant3') as Mesh;
                 if (block2) collidables.push(block2);
                 if (block) collidables.push(block);
                 if (block3) collidables.push(block3);
                 if (block4) collidables.push(block4);
-                if (platform) collidables.push(platform);
+                //if (platform) collidables.push(platform);
                 if (platform1) collidables.push(platform1);
+                if (platform2) collidables.push(platform2);
+                if (obstaclevolant1) collidables.push(obstaclevolant1);
+                if (obstaclevolant2) collidables.push(obstaclevolant2);
+                if (obstaclevolant3) collidables.push(obstaclevolant3);
             }
 
             // Knockback animé du joueur (comme les slimes)
@@ -447,7 +925,7 @@ export class SceneCB {
                 // collision avec les slimes pendant le knockback
                 if (knockbackVelocityX !== 0 && isGrounded) {
                     const pBB = playerCollider.getBoundingInfo().boundingBox;
-                    const eps = 0.001;
+                    const eps = 0.0005;
                     const overlappingSlimes: Slime[] = [];
                     for (const slime of slimes) {
                         // ici ignorer le slime qui a provoqué la collision
@@ -459,6 +937,19 @@ export class SceneCB {
                         const overlapY = pBB.maximumWorld.y > sBB.minimumWorld.y + eps && pBB.minimumWorld.y < sBB.maximumWorld.y - eps;
                         if (overlapX && overlapY) {
                             overlappingSlimes.push(slime);
+                        }
+                    }
+
+                    for (const guepe of guepes) {
+                        // ici ignorer le guepe qui a provoqué la collision
+                        if (guepe === lastHitSlime) {
+                            continue;
+                        }
+                        const sBB = guepe.slimeCollider.getBoundingInfo().boundingBox;
+                        const overlapX = pBB.maximumWorld.x > sBB.minimumWorld.x + eps && pBB.minimumWorld.x < sBB.maximumWorld.x - eps;
+                        const overlapY = pBB.maximumWorld.y > sBB.minimumWorld.y + eps && pBB.minimumWorld.y < sBB.maximumWorld.y - eps;
+                        if (overlapX && overlapY) {
+                            overlappingSlimes.push(guepe);
                         }
                     }
 
@@ -564,6 +1055,21 @@ export class SceneCB {
                                 }
                             }
                         }
+                        if(invincibilityFrames>0){
+                            const pBB = playerCollider.getBoundingInfo().boundingBox;
+                            const eps = 0.0005;
+                            for (const guepe of guepes) {
+                                const gBB = guepe.slimeCollider.getBoundingInfo().boundingBox;
+                                const overlapX = pBB.maximumWorld.x > gBB.minimumWorld.x + eps && pBB.minimumWorld.x < gBB.maximumWorld.x - eps;
+                                const overlapY = pBB.maximumWorld.y > gBB.minimumWorld.y + eps && pBB.minimumWorld.y < gBB.maximumWorld.y - eps;
+                                if (overlapX && overlapY) {
+                                    playerCollider.position.x = prevX;
+                                    playerCollider.computeWorldMatrix(true);
+                                    acceleration = 0;
+                                    break;
+                                }
+                            }
+                        }
                         if(acceleration>-speed){
                             acceleration-=0.004;
                         }
@@ -576,7 +1082,7 @@ export class SceneCB {
                         for (const obs of collidables) {
                             const oBB = obs.getBoundingInfo().boundingBox;
                             const pBB = playerCollider.getBoundingInfo().boundingBox;
-                            const eps = 0.001;
+                            const eps = 0.0005;
                             if (pBB.maximumWorld.x > oBB.minimumWorld.x && pBB.minimumWorld.x < oBB.maximumWorld.x &&
                                 pBB.minimumWorld.y < oBB.maximumWorld.y - eps && pBB.maximumWorld.y > oBB.minimumWorld.y + eps) {
                                 playerCollider.position.x = prevX;
@@ -592,6 +1098,21 @@ export class SceneCB {
                                 const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
                                 const overlapX = pBB.maximumWorld.x > sBB.minimumWorld.x + eps && pBB.minimumWorld.x < sBB.maximumWorld.x - eps;
                                 const overlapY = pBB.maximumWorld.y > sBB.minimumWorld.y + eps && pBB.minimumWorld.y < sBB.maximumWorld.y - eps;
+                                if (overlapX && overlapY) {
+                                    playerCollider.position.x = prevX;
+                                    playerCollider.computeWorldMatrix(true);
+                                    acceleration = 0;
+                                    break;
+                                }
+                            }
+                        }
+                        if(invincibilityFrames>0){
+                            const pBB = playerCollider.getBoundingInfo().boundingBox;
+                            const eps = 0.001;
+                            for (const guepe of guepes) {
+                                const gBB = guepe.slimeCollider.getBoundingInfo().boundingBox;
+                                const overlapX = pBB.maximumWorld.x > gBB.minimumWorld.x + eps && pBB.minimumWorld.x < gBB.maximumWorld.x - eps;
+                                const overlapY = pBB.maximumWorld.y > gBB.minimumWorld.y + eps && pBB.minimumWorld.y < gBB.maximumWorld.y - eps;
                                 if (overlapX && overlapY) {
                                     playerCollider.position.x = prevX;
                                     playerCollider.computeWorldMatrix(true);
@@ -720,12 +1241,48 @@ export class SceneCB {
                     }
                 }
             }
+            if (invincibilityFrames > 0 && !hitObstacle) {
+                const pBB = playerCollider.getBoundingInfo().boundingBox;
+                const playerHalfY = pBB.extendSizeWorld.y;
+                for (const guepe of guepes) {
+                    const gBB = guepe.slimeCollider.getBoundingInfo().boundingBox;
+                    const guepeTop = gBB.maximumWorld.y;
+                    const guepeLeft = gBB.minimumWorld.x;
+                    const guepeRight = gBB.maximumWorld.x;
+                    const guepeBottom = gBB.minimumWorld.y;
+                    const overlapsX = pBB.maximumWorld.x >= guepeLeft && pBB.minimumWorld.x <= guepeRight;
+                    if ((dy<=0 && overlapsX && pBB.minimumWorld.y <= guepeTop && pBB.maximumWorld.y >= guepeTop)) {
+                        playerCollider.position.y = guepeTop + playerHalfY;
+                        playerCollider.computeWorldMatrix(true);
+                        if (verticalVelocity < -0.005) isLanded = true;
+                        verticalVelocity = 0;
+                        isGrounded = true;
+                        falling = false;
+                        hitSlimeFromTop = true;
+                        break;
+                    }
+                    else if (dy>0 && overlapsX && pBB.maximumWorld.y >= guepeBottom && pBB.minimumWorld.y <= guepeBottom) {
+                        playerCollider.position.y = guepeBottom - playerHalfY;
+                        playerCollider.computeWorldMatrix(true);
+                        verticalVelocity = 0;
+                        isGrounded = false;
+                        hitSlimeFromTop = true;
+                        break;
+                    }
+                }
+            }
 
             if (!hitObstacle && !hitSlimeFromTop) {
                 isGrounded = false;
             }
             lyrina.position.copyFrom(playerCollider.position);
             sideCamera.position.x = playerCollider.position.x;
+            // Quand le joueur dépasse y = 1.1, la caméra monte de 1 en hauteur
+            if (playerCollider.position.y > 1.1) {
+                sideCamera.position.y = fixedCameraY + 1;
+            } else {
+                sideCamera.position.y = fixedCameraY;
+            }
             attackCollider.position.copyFrom(lyrina.position);
             if(lyrina.invertU)
                 attackCollider.position._x +=0.107;
@@ -748,6 +1305,9 @@ export class SceneCB {
             slimeboucle(slime2);
             slimeboucle(slime3);
             slimeboucle(slime4);
+            slimerougeboucle(slimerouge1);
+            slimerougeboucle(slimerouge2);
+            guepeboucle(guepe1);
         })
     }
 
@@ -755,7 +1315,7 @@ export class SceneCB {
         const ground = MeshBuilder.CreateBox('block', {width: 10, height: 0.1, depth: 0.5}, this.scene);
         ground.position = new Vector3(0,-0.18,0);
         ground.checkCollisions = true;
-        ground.isVisible = true;
+        ground.isVisible = this.devpoweractive;
 
         const groundMaterial = new StandardMaterial("groundMaterial", scene);
         groundMaterial.wireframe = true;
@@ -784,26 +1344,29 @@ export class SceneCB {
         const platformMaterial = new StandardMaterial("platformMaterial", scene);
         platformMaterial.wireframe = true;
         platform.material = platformMaterial;
+        platform.isVisible = false;
 
-        const ground2 = new Ground("block2", this.scene, new Vector3(-11, -0.18, 0), 68);
-        const ground3 = new Ground("block3", this.scene, new Vector3(-22, -0.18, 0), 68);
-        const ground4 = new Ground("block4", this.scene, new Vector3(7, -0.18, 0), 20);
+        const ground2 = new Ground("block2", this.scene, new Vector3(-11, -0.18, 0), 68,this.devpoweractive);
+        const ground3 = new Ground("block3", this.scene, new Vector3(-22, -0.18, 0), 68,this.devpoweractive);
+        const ground4 = new Ground("block4", this.scene, new Vector3(7, -0.18, 0), 20,this.devpoweractive);
 
-        const obstaclevolant = new Obstaclesflying("obstaclevolant1", this.scene, new Vector3(0, 0.5, 0), 3, 5);
-        const obstaclevolant2 = new Obstaclesflying("obstaclevolant2", this.scene, new Vector3(-0.5, 0.5, 0), 3, 5);
-        const obstaclevolant3 = new Obstaclesflying("obstaclevolant3", this.scene, new Vector3(-1, 0.5, 0), 3, 5);
-        const obstaclevolant4 = new Obstaclesflying("obstaclevolant4", this.scene, new Vector3(-3, 0.5, 0), 10, 1);
-        const obstaclevolant5 = new Obstaclesflying("obstaclevolant5", this.scene, new Vector3(-5.5, 0.5, 0), 10, 2);
-        const obstaclevolant6 = new Obstaclesflying("obstaclevolant6", this.scene, new Vector3(-10, 0.5, 0), 10, 5);
+        const obstaclevolant = new Obstaclesflying("obstaclevolant1", this.scene, new Vector3(0, 10.5, 0), 3, 5,this.devpoweractive);
+        //celui la
+        const obstaclevolant2 = new Obstaclesflying("obstaclevolant2", this.scene, new Vector3(-0.02, 0.37, -0.01), 15, 3,this.devpoweractive);
+        const obstaclevolant3 = new Obstaclesflying("obstaclevolant3", this.scene, new Vector3(-1, 10.5, 0), 3, 5,this.devpoweractive);
+        const obstaclevolant4 = new Obstaclesflying("obstaclevolant4", this.scene, new Vector3(-3, 1.1, 0), 10, 1,this.devpoweractive);
+        const obstaclevolant5 = new Obstaclesflying("obstaclevolant5", this.scene, new Vector3(-5.5, 0.5, 0), 10, 2,this.devpoweractive);
+        const obstaclevolant6 = new Obstaclesflying("obstaclevolant6", this.scene, new Vector3(-10, 0.5, 0), 10, 5,this.devpoweractive);
 
-        const obstacle = new Obstacles("obstacle1", this.scene, new Vector3(-12, 0.5, 0), 3, 1);
-        const obstacle2 = new Obstacles("obstacle2", this.scene, new Vector3(-12.5, 0.5, 0), 3, 2);
-        const obstacle3 = new Obstacles("obstacle3", this.scene, new Vector3(-13, 0.5, 0), 3, 3);
-        const obstacle4 = new Obstacles("obstacle4", this.scene, new Vector3(-16, 0.5, 0), 10, 1);
-        const obstacle5 = new Obstacles("obstacle5", this.scene, new Vector3(-20, 0.5, 0), 10, 2);
-        const obstacle6 = new Obstacles("obstacle6", this.scene, new Vector3(-24, 0.5, 0), 10, 5);
+        const obstacle = new Obstacles("obstacle1", this.scene, new Vector3(-12, 0.5, 0), 3, 1,this.devpoweractive);
+        const obstacle2 = new Obstacles("obstacle2", this.scene, new Vector3(-12.5, 0.5, 0), 3, 2,this.devpoweractive);
+        const obstacle3 = new Obstacles("obstacle3", this.scene, new Vector3(-13, 0.5, 0), 3, 3,this.devpoweractive);
+        const obstacle4 = new Obstacles("obstacle4", this.scene, new Vector3(-16, 0.5, 0), 10, 1,this.devpoweractive);
+        const obstacle5 = new Obstacles("obstacle5", this.scene, new Vector3(-20, 0.5, 0), 10, 2,this.devpoweractive);
+        const obstacle6 = new Obstacles("obstacle6", this.scene, new Vector3(-24, 0.5, 0), 10, 5,this.devpoweractive);
 
-        const platform1 = new Platforme("platform1", this.scene, new Vector3(-2, 0.35, 0));
+        const platform1 = new Platforme("platform1", this.scene, new Vector3(-2, 0.35, 0),this.devpoweractive);
+        const platform2 = new Platforme("platform2", this.scene, new Vector3(-2.5, 0.9, 0),this.devpoweractive);
 
         const skybox = Mesh.CreateBox("BackgroundSkybox", 500, scene, undefined, Mesh.BACKSIDE);
     

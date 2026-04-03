@@ -3,8 +3,9 @@ import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilde
 export class Obstaclesflying {
     public name: string;
     public lemesh: Mesh;
+    public tiles: Sprite[];
 
-    constructor(name: string, scene: Scene, initialPosition: Vector3, widthincubes: number, heightincubes: number) {
+    constructor(name: string, scene: Scene, initialPosition: Vector3, widthincubes: number, heightincubes: number,visible:boolean) {
         //a refaire de la meme maniere que ceului de ground
         
         
@@ -33,11 +34,16 @@ export class Obstaclesflying {
         ground.position = initialPosition;
 
         ground.checkCollisions = true;
-        ground.isVisible = true;
+        ground.isVisible = visible;
 
         const groundMaterial = new StandardMaterial("groundMaterial", scene);
         groundMaterial.wireframe = true;
         ground.material = groundMaterial;
+
+        // liste des sprites associés à cet obstacle volant
+        this.tiles = [];
+        // on attache la référence sur le mesh pour pouvoir les déplacer avec la souris
+        (ground as Mesh).metadata = { tiles: this.tiles };
 
         // chaque texture PNG fait 96x96 px, on ajuste seulement la capacité
         const tileCapacity = widthincubes * heightincubes;
@@ -189,6 +195,8 @@ export class Obstaclesflying {
                 tile.size = 0.15;
                 tile.cellIndex = 0;
                 tile.invertU = invertU;
+
+                this.tiles.push(tile);
             }
         }
         

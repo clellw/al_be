@@ -4,7 +4,7 @@ export class Ground {
     public name: string;
     public lemesh: Mesh;
 
-    constructor(name: string, scene: Scene, initialPosition: Vector3, sizeintitles: number) {
+    constructor(name: string, scene: Scene, initialPosition: Vector3, sizeintitles: number, visible:boolean) {
         // largeur d'une tuile en unités monde (10 unités pour 68 tuiles sur le sol principal)
         const tileWorldWidth = 10 / 68;
 
@@ -15,7 +15,7 @@ export class Ground {
         ground.position.y = -0.18;
 
         ground.checkCollisions = true;
-        ground.isVisible = true;
+        ground.isVisible = visible;
 
         const groundMaterial = new StandardMaterial("groundMaterial", scene);
         groundMaterial.wireframe = true;

@@ -4,7 +4,7 @@ export class Platforme {
     public name: string;
     public lemesh: Mesh;
 
-    constructor(name: string, scene: Scene, initialPosition: Vector3) {
+    constructor(name: string, scene: Scene, initialPosition: Vector3,visible:boolean) {
         const PlatManager = new SpriteManager(
             'PlatManager',
             './sprites/platform_1.png',
@@ -22,6 +22,7 @@ export class Platforme {
         this.lemesh = MeshBuilder.CreateBox(name, {width: platform.width, height: platform.height, depth: 0.5}, scene);
         this.lemesh.position = initialPosition;
         this.lemesh.checkCollisions = true;
+        this.lemesh.isVisible = visible;
         const platformMaterial = new StandardMaterial("platformMaterial", scene);
         platformMaterial.wireframe = true;
         this.lemesh.material = platformMaterial;
