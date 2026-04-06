@@ -1,6 +1,6 @@
 import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
 
-export class Frog {
+export class Guepepurple {
     public id: string;
     public spriteManager: SpriteManager;
     public attackCollider: Mesh;
@@ -11,7 +11,7 @@ export class Frog {
     public scolliderDepth: number;
     public verticalVelocity: number;
     public IsGrounded: boolean;
-    public slimeHealth: number;
+    public guepeHealth: number;
     public waittime: number;
     public actionTime: number;
     public dir: number;
@@ -21,36 +21,39 @@ export class Frog {
     public degat:number;
     public isDead: boolean;
     public isSuffering: boolean;
-    // Gestion du "saut de réaction" après le saut du joueur
-    public jumpDelay: number;   // compte à rebours avant le saut (en frames)
-    public jumpTime: number;    // temps passé dans l'animation de saut
-    public baseY: number;       // hauteur de base avant le saut
+    public slimeHealth: number;
+    public axe: number;
+    public distance: number;
+    public initialPositiony: number;
+    public initialPositionx: number;
+    public isgoinigup: boolean;
 
-    constructor(id: string, scene: Scene, initialPosition: Vector3,visible:boolean) {
+    constructor(id: string, scene: Scene, initialPosition: Vector3, visible:boolean,axe:number,distance:number,debut:boolean) {
         const SlimeManager = new SpriteManager(
             'SlimeManager',
-            './sprites/frog.png',
+            './sprites/spritesheetguepepurple.png',
             1,
-            { width: 20, height: 20 },
+            { width: 128, height: 128 },
             scene
         );
         SlimeManager.texture=new Texture(
-            "./sprites/frog.png",
+            "./sprites/spritesheetguepepurple.png",
             scene,
             false, // no mipmaps
             false,
             Texture.NEAREST_SAMPLINGMODE
         );
         const slime = new Sprite('slime', SlimeManager);
-        slime.playAnimation(0, 3, true, 100);
+
+        slime.playAnimation(0, 5, true, 100);
 
         slime.position = initialPosition;
-        slime.size = 0.2;//0.2
+        slime.size = 0.6;
 
-        const scolliderWidth = slime.size * 0.7;   // narrower than sprite width
-        const scolliderHeight = slime.size /1.4;   // close to sprite height
+        const scolliderWidth = slime.size * 0.4;   // narrower than sprite width
+        const scolliderHeight = slime.size /3;   // close to sprite height
         const scolliderDepth = 0.1;                  // thin depth for 2D side view
-        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth+0.01, height: scolliderHeight+0.01, depth: scolliderDepth}, scene);
+        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth-0.04, height: scolliderHeight-0.04, depth: scolliderDepth}, scene);
         slimeCollider.isVisible = false;
         slimeCollider.material = new StandardMaterial('slimeMaterial', scene);
         slimeCollider.checkCollisions = true;
@@ -59,18 +62,19 @@ export class Frog {
         slimeCollider.ellipsoidOffset = new Vector3(0, 0, 0);
         slimeCollider.position = slime.position.clone();
         const verticalVelocity = 0;
-        const IsGrounded = true;
-        const slimeHealth = 40;
-        const waittime = 10;
+        const IsGrounded = false;
+        const slimeHealth = 20;
+        const waittime = 60;
         const actionTime = 0;
         const dir = 1;
-        const speed = 0.005;
-        const isAttacking = false;
+        const speed = 0.004;
+        const isAttacking = true;
         const pastFirstCycle = false;
-        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderHeight+0.02, height: scolliderWidth, depth: scolliderDepth}, scene);
+        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderHeight-0.01, height: scolliderWidth-0.06, depth: scolliderDepth}, scene);
         sattackCollider.isVisible = visible;
         sattackCollider.material = new StandardMaterial('playerMaterial', scene);
         sattackCollider.material.wireframe = true;
+        // La guêpe est toujours en état d'attaque : sa hitbox doit
         sattackCollider.checkCollisions = false;
         this.sprite = slime;
         this.spriteManager = SlimeManager;
@@ -80,7 +84,7 @@ export class Frog {
         this.scolliderDepth = scolliderDepth;
         this.verticalVelocity = verticalVelocity;
         this.IsGrounded = IsGrounded;
-        this.slimeHealth = slimeHealth;
+        this.guepeHealth = slimeHealth;
         this.waittime = waittime;
         this.actionTime = actionTime;
         this.dir = dir;
@@ -89,11 +93,14 @@ export class Frog {
         this.pastFirstCycle = pastFirstCycle;
         this.attackCollider = sattackCollider;
         this.id = id;
-        this.degat = 40;
+        this.degat = 20;
         this.isDead = false;
         this.isSuffering = false;
-        this.jumpDelay = 0;
-        this.jumpTime = 0;
-        this.baseY = slime.position.y;
+        this.slimeHealth = slimeHealth;
+        this.axe = axe;
+        this.distance = distance;
+        this.initialPositiony = slimeCollider.position.y;
+        this.initialPositionx = slimeCollider.position.x;
+        this.isgoinigup = debut;
     }
 }

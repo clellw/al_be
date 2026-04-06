@@ -192,7 +192,7 @@ export class Obstaclesflying {
                 tile.position.x = initialPosition.x + offsetX;
                 tile.position.y = initialPosition.y + offsetY;
                 tile.position.z = -0.01;
-                tile.size = 0.15;
+                tile.size = 0.1501;
                 tile.cellIndex = 0;
                 tile.invertU = invertU;
 

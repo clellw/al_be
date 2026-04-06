@@ -1,6 +1,6 @@
 import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
 
-export class Frog {
+export class Frogpurple {
     public id: string;
     public spriteManager: SpriteManager;
     public attackCollider: Mesh;
@@ -29,13 +29,13 @@ export class Frog {
     constructor(id: string, scene: Scene, initialPosition: Vector3,visible:boolean) {
         const SlimeManager = new SpriteManager(
             'SlimeManager',
-            './sprites/frog.png',
+            './sprites/frogpurple.png',
             1,
             { width: 20, height: 20 },
             scene
         );
         SlimeManager.texture=new Texture(
-            "./sprites/frog.png",
+            "./sprites/frogpurple.png",
             scene,
             false, // no mipmaps
             false,

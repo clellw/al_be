@@ -31,18 +31,24 @@ export class Guepe {
             { width: 128, height: 128 },
             scene
         );
-        SlimeManager.texture.updateSamplingMode(Texture.NEAREST_NEAREST);
+        SlimeManager.texture=new Texture(
+            "./sprites/spritesheetguepe.png",
+            scene,
+            false, // no mipmaps
+            false,
+            Texture.NEAREST_SAMPLINGMODE
+        );
         const slime = new Sprite('slime', SlimeManager);
 
         slime.playAnimation(0, 5, true, 100);
 
         slime.position = initialPosition;
-        slime.size = 0.5;
+        slime.size = 0.6;
 
         const scolliderWidth = slime.size * 0.4;   // narrower than sprite width
         const scolliderHeight = slime.size /3;   // close to sprite height
         const scolliderDepth = 0.1;                  // thin depth for 2D side view
-        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth, height: scolliderHeight, depth: scolliderDepth}, scene);
+        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth-0.04, height: scolliderHeight-0.04, depth: scolliderDepth}, scene);
         slimeCollider.isVisible = false;
         slimeCollider.material = new StandardMaterial('slimeMaterial', scene);
         slimeCollider.checkCollisions = true;
@@ -59,7 +65,7 @@ export class Guepe {
         const speed = 0.004;
         const isAttacking = true;
         const pastFirstCycle = false;
-        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderHeight-0.01, height: scolliderWidth-0.02, depth: scolliderDepth}, scene);
+        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderHeight-0.01, height: scolliderWidth-0.06, depth: scolliderDepth}, scene);
         sattackCollider.isVisible = visible;
         sattackCollider.material = new StandardMaterial('playerMaterial', scene);
         sattackCollider.material.wireframe = true;
