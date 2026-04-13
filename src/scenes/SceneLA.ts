@@ -1,4 +1,4 @@
-import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, FollowCamera, ActionManager, ExecuteCodeAction, StandardMaterial} from "@babylonjs/core"
+import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, FollowCamera, ActionManager, ExecuteCodeAction, StandardMaterial, Mesh} from "@babylonjs/core"
 
 export class SceneLA {
     
@@ -32,14 +32,11 @@ export class SceneLA {
 
         this.CreateCharacter(scene);
         scene.collisionsEnabled = true;
+        this.CreateEnvironment(scene);
         return scene;
     }
 
     async CreateCharacter(scene:Scene): Promise<void> {
-
-        const ground = MeshBuilder.CreateBox('block', {width: 10, height: 0.1, depth: 0.5}, this.scene);
-        ground.position = new Vector3(0,-0.18,0);
-        ground.checkCollisions = true;
 
         //importing the sprites for the character
         const LManager = new SpriteManager(
@@ -70,10 +67,7 @@ export class SceneLA {
         playerCollider.isVisible = true;
         playerCollider.material = new StandardMaterial('playerMaterial', scene);
         playerCollider.material.wireframe = true;
-        playerCollider.checkCollisions = true;
-        // Use ellipsoid collisions for smoother contact; align bottom of ellipsoid to feet
-        playerCollider.ellipsoid = new Vector3(colliderWidth/2, colliderHeight/2, colliderDepth/2);
-        playerCollider.ellipsoidOffset = new Vector3(0, 0, 0);
+        // No engine collisions/ellipsoid: we resolve collisions manually with AABB
         playerCollider.position = lyrina.position.clone();
         const fixedCameraY = sideCamera.position.y;
         scene.activeCamera = sideCamera;
@@ -102,16 +96,34 @@ export class SceneLA {
             })
         );
 
+        // Create and tweak the background material.
+        const backgroundManager = new SpriteManager(
+            "tilesManager",
+            "./sprites/place_holder_b.jpg",
+            100,           
+            {width:961, height:501}, 
+            scene
+        );
+        const background = new Sprite("background", backgroundManager);
+        background.position.z = -1;
+        background.position.y = 1;
+        background.width = 6;
+        background.height = 2.9;
+
         let newAnim = true;
-        const speed=0.07;
+        const speed=0.03;
         let acceleration=0;
-        const gravity = 0.0049999999;
-        const jumpStrength = 0.09;
+        const gravity = 0.0012049999999;
+        const jumpStrength = 0.04;
         let verticalVelocity = 0;
         let isGrounded = false;
         let isLanded = false;
         let falling=false;
+        let ground: Mesh | null = null;
         scene.onBeforeRenderObservable.add(()=>{
+            if (!ground) {
+                ground = scene.getMeshByName('block') as Mesh;
+            }
             // Jump input: start jump only if grounded
             if (keyStatus[' '] && isGrounded) {
                 verticalVelocity = jumpStrength;
@@ -127,21 +139,42 @@ export class SceneLA {
 
             // Apply vertical physics (gravity affects verticalVelocity)
             verticalVelocity -= gravity;
-            const prevY = playerCollider.position.y;
-            playerCollider.moveWithCollisions(new Vector3(0, verticalVelocity, 0));
-            const actualDeltaY = playerCollider.position.y - prevY;
+            const dy = verticalVelocity;
+            playerCollider.position.y += dy;
 
-            // Grounded detection: if moving down but blocked, snap to ground and zero vertical
-            if (verticalVelocity < 0 && actualDeltaY > verticalVelocity * 0.5) {
-                isGrounded = true;
-                if(verticalVelocity < -0.005) isLanded = true;
-                verticalVelocity = 0;
-            } else if (verticalVelocity > 0 && actualDeltaY < verticalVelocity * 0.5) {
-                // Hit ceiling: stop upward motion
-                verticalVelocity = 0;
+            if (ground) {
+                const groundBB = ground.getBoundingInfo().boundingBox;
+                const playerBB = playerCollider.getBoundingInfo().boundingBox;
+                const groundTop = groundBB.maximumWorld.y;
+                const groundBottom = groundBB.minimumWorld.y;
+                const groundLeft = groundBB.minimumWorld.x;
+                const groundRight = groundBB.maximumWorld.x;
+                const playerBottom = playerBB.minimumWorld.y;
+                const playerTop = playerBB.maximumWorld.y;
+                const playerLeft = playerBB.minimumWorld.x;
+                const playerRight = playerBB.maximumWorld.x;
+                const playerHalfY = playerBB.extendSizeWorld.y;
+
+                const overlapsX = playerRight >= groundLeft && playerLeft <= groundRight;
+
+                if (dy < 0 && overlapsX && playerBottom <= groundTop && playerTop >= groundTop) {
+                    // Falling and reached the top of the ground
+                    playerCollider.position.y = groundTop + playerHalfY;
+                    if (verticalVelocity < -0.005) isLanded = true;
+                    verticalVelocity = 0;
+                    isGrounded = true;
+                    falling = false;
+                } else if (dy > 0 && overlapsX && playerTop >= groundBottom && playerBottom <= groundBottom) {
+                    // Going up and hit the bottom of the ground (ceiling)
+                    playerCollider.position.y = groundBottom - playerHalfY;
+                    verticalVelocity = 0;
+                    isGrounded = false;
+                } else {
+                    // In the air, not touching the ground or off the edges
+                    isGrounded = false;
+                }
             } else {
                 isGrounded = false;
-                falling = false;
             }
             
             if(keyStatus.q||keyStatus.s){
@@ -151,14 +184,20 @@ export class SceneLA {
                 }
                 if(keyStatus.s && !keyStatus.q){
                     lyrina.invertU = false;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    {
+                        const stepX = acceleration;
+                        playerCollider.position.x += stepX;
+                    }
                     if(acceleration>-speed){
                         acceleration-=0.004;
                     }
                 }
                 else if(keyStatus.q ){
                     lyrina.invertU = true;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    {
+                        const stepX = acceleration;
+                        playerCollider.position.x += stepX;
+                    }
                     if(acceleration<speed){
                         acceleration+=0.004;
                     }
@@ -170,11 +209,17 @@ export class SceneLA {
                 }
                 else if(acceleration>0){
                     acceleration-=0.008;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    {
+                        const stepX = acceleration;
+                        playerCollider.position.x += stepX;
+                    }
                 }
                 else if(acceleration<0){
                     acceleration+=0.008;
-                    playerCollider.moveWithCollisions(new Vector3(acceleration, 0, 0));
+                    {
+                        const stepX = acceleration;
+                        playerCollider.position.x += stepX;
+                    }
                 }
                 if(acceleration==0 && isGrounded){
                     if(!newAnim)lyrina.playAnimation(0,7,true,100);
@@ -187,7 +232,41 @@ export class SceneLA {
             }
             lyrina.position.copyFrom(playerCollider.position);
             sideCamera.position.x = playerCollider.position.x;
+            background.position.x = lyrina.position._x;
             console.log(acceleration);
         });
+    }
+
+    async CreateEnvironment(scene:Scene): Promise<void> {
+
+        const ground = MeshBuilder.CreateBox('block', {width: 10, height: 0.5, depth: 0.5}, this.scene);
+        ground.position = new Vector3(0,-0.18,0);
+        ground.checkCollisions = true;
+        ground.isVisible = true;
+
+        const groundMaterial = new StandardMaterial("groundMaterial", scene);
+        groundMaterial.wireframe = true;
+        ground.material = groundMaterial;
+        const spriteManager = new SpriteManager(
+            "tilesManager",
+            "./sprites/grass_m.png",
+            100,           // max number of sprites
+            96, 
+            scene
+        );
+
+        // Create a few tiles
+        for (let i = 0; i < 68; i++) {
+            const tile = new Sprite("tile" + i, spriteManager);
+            tile.position.x = -67 * 0.147 / 2 + i * 0.147; // space tiles apart
+            tile.size = 0.15;
+            tile.position.y = -0.18;
+            tile.position.z = -0.01;
+            tile.cellIndex = 0; // choose tile from sprite sheet
+        }
+
+        const skybox = Mesh.CreateBox("BackgroundSkybox", 500, scene, undefined, Mesh.BACKSIDE);
+    
+        
     }
 }

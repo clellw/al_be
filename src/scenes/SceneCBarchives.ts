@@ -9,8 +9,6 @@ import { Slimerouge } from "./Slimerouge";
 import { Guepe } from "./Guepe";
 import { Frog } from "./Frog";
 import { Nuage } from "./Nuage";
-import { Frogpurple } from "./Frogpurple";
-import {Guepepurple} from "./Guepepurple";
 export class SceneCB {
     
     scene: Scene;
@@ -232,23 +230,18 @@ export class SceneCB {
         const slimerouge2 = new Slimerouge('slimerouge2', scene, new Vector3(-14, 0, 0));
         // on place la guêpe dans la zone visible près du joueur
         const guepe1 = new Guepe('guepe1', scene, new Vector3(-1.5, 0.01, 0),this.devpoweractive);
-        const guepepurple1 = new Guepepurple('guepepurple1', scene, new Vector3(-1.5, 0.6, 0),this.devpoweractive,0,0.2,true);
-        const guepepurple2 = new Guepepurple('guepepurple2', scene, new Vector3(-1, 1, 0),this.devpoweractive,1,0.2,false);
-        //frog create
+
         const frog1 = new Frog('frog1', scene, new Vector3(4, 0, 0),this.devpoweractive);
         const frog2 = new Frog('frog2', scene, new Vector3(-0.5, 0, 0),this.devpoweractive);
-        const frogpurple1 = new Frogpurple('frogpurple1', scene, new Vector3(6, 0, 0),this.devpoweractive);
-        const frogpurple2 = new Frogpurple('frogpurple2', scene, new Vector3(8, 0, 0),this.devpoweractive);
 
-        const slimes = [slime1, slime2, slime3,slime4, slimerouge1, slimerouge2, frog1, frog2, frogpurple1, frogpurple2];
-        const guepes = [guepe1, guepepurple1, guepepurple2];
+        const slimes = [slime1, slime2, slime3,slime4, slimerouge1, slimerouge2, frog1, frog2];
+        const guepes = [guepe1];
 
         let lastHitSlime: Slime | null | Slimerouge | Guepe = null;
         
         // Compteur global pour déclencher le saut des frogs
         // après un saut du joueur.
         const frogs = [frog1, frog2];
-        const frogspurple = [frogpurple1, frogpurple2];
 
         // Détecte s'il y a du sol "devant" un collider de slime, dans une direction donnée
         const hasGroundAhead = (slimeCollider: Mesh, dir: number): boolean => {
@@ -268,173 +261,6 @@ export class SceneCB {
             }
             return false;
         };
-
-        function frogpurpleboucle(frog: Frogpurple): void {
-            // Si le frog est déjà mort, on ne fait plus rien
-            if (frog.isDead) {
-                return;
-            }
-
-            // Dégâts reçus depuis l'attaque du joueur
-            if (frog.attackCollider.intersectsMesh(attackCollider, false) && attackCollider.checkCollisions) {
-                frog.slimeHealth -= 2;
-                frog.isSuffering = true;
-                // on (ré)initialise un petit timer de souffrance
-                frog.waittime = 20;
-                // pas de frame spéciale de "hit" : on garde l'animation idle (0..5)
-                frog.sprite.playAnimation(0, 3, true, 100);
-                frog.actionTime = 0;
-                frog.isAttacking = false;
-            }
-
-            // mort du guepe
-            if (frog.slimeHealth <= 0 && !frog.isDead) {
-                frog.isDead = true;
-                frog.attackCollider.checkCollisions = false;
-                frog.sprite.dispose();
-                frog.slimeCollider.dispose();
-                frog.attackCollider.dispose();
-                slimes.splice(slimes.indexOf(frog), 1);
-                return;
-            }
-
-            if (frog.isSuffering) {
-                const prevX = frog.slimeCollider.position.x;
-                if(frog.sprite.position.x < lyrina.position.x) {
-                    frog.slimeCollider.position.x -= 0.01;
-                    
-                }
-                else {
-                    frog.slimeCollider.position.x += 0.01;
-                    frog.sprite.invertU = true;
-                }
-                frog.slimeCollider.computeWorldMatrix(true);
-                // faire clignoter la guepe comme le joueur pendant quelques frames
-                if (frog.waittime > 0) {
-                    frog.waittime--;
-                    // clignotement simple: visible 3 frames sur 6
-                    frog.sprite.isVisible = (frog.waittime % 6) >= 3;
-                } else {
-                    frog.isSuffering = false;
-                    frog.sprite.isVisible = true;
-                }
-                frog.slimeCollider.computeWorldMatrix(true);
-                // empêcher un slime touché de traverser les autres slimes
-                for (const other of slimes) {
-                    if (other === frog) continue;
-                    const oBB = other.slimeCollider.getBoundingInfo().boundingBox;
-                    const sBB = frog.slimeCollider.getBoundingInfo().boundingBox;
-                    const eps = 0.0005;
-                    const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
-                    const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
-                    if (overlapX && overlapY) {
-                        frog.slimeCollider.position.x = prevX;
-                        frog.slimeCollider.computeWorldMatrix(true);
-                        break;
-                    }
-                }
-                for (const obstacle of collidables) {
-                    const oBB = obstacle.getBoundingInfo().boundingBox;
-                    const sBB = frog.slimeCollider.getBoundingInfo().boundingBox;
-                    const eps = 0.0005;
-                    const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
-                    const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
-                    if (overlapX && overlapY) {
-                        frog.slimeCollider.position.x = prevX;
-                        frog.slimeCollider.computeWorldMatrix(true);
-                        break;
-                    }
-                }
-            } else {
-                // faire en sorte de sauter 20 frames apres que le joueur est sauté n'importe où dans la scene,
-                // pour donner l'impression que les frogs réagissent au saut du joueur.
-
-                // 1) Gestion du délai avant le saut
-                if (frog.jumpDelay > 0) {
-                    frog.jumpDelay--;
-                    // Quand le délai arrive à 0, on applique une impulsion vers le haut
-                    if (frog.jumpDelay === 0 && frog.IsGrounded) {
-                        frog.verticalVelocity = 0.06; // force du saut
-                        frog.IsGrounded = false;
-                    }
-                }
-
-                // 2) Animation : frame 4 pendant le saut, 0..3 au sol
-                if (!frog.IsGrounded || Math.abs(frog.verticalVelocity) > 0.0001) {
-                    // en l'air : pose de saut (frame 4)
-                    frog.sprite.playAnimation(4, 4, true, 100);
-                } else if(frog.sprite.cellIndex==4){
-                    // au sol : idle 0..3
-                    frog.sprite.playAnimation(0, 3, true, 160);
-                }
-            }
-
-            // === PHYSIQUE VERTICALE de la frog (même logique que le joueur/slimes) ===
-            frog.verticalVelocity -= gravity;
-            const fdy = frog.verticalVelocity;
-            const prevY = frog.slimeCollider.position.y;
-            frog.slimeCollider.position.y += fdy;
-            frog.slimeCollider.computeWorldMatrix(true);
-
-            let frogHitObstacle = false;
-            for (const obstacle of collidables) {
-                const oBB = obstacle.getBoundingInfo().boundingBox;
-                const fBB = frog.slimeCollider.getBoundingInfo().boundingBox;
-                const obstacleTop = oBB.maximumWorld.y;
-                const obstacleBottom = oBB.minimumWorld.y;
-                const obstacleLeft = oBB.minimumWorld.x;
-                const obstacleRight = oBB.maximumWorld.x;
-                const frogHalfY = fBB.extendSizeWorld.y;
-                const overlapsX = fBB.maximumWorld.x >= obstacleLeft && fBB.minimumWorld.x <= obstacleRight;
-
-                // Atterrissage sur le haut d'un obstacle
-                if (fdy <= 0 && overlapsX && fBB.minimumWorld.y <= obstacleTop && fBB.maximumWorld.y >= obstacleTop) {
-                    frog.slimeCollider.position.y = obstacleTop + frogHalfY;
-                    frog.slimeCollider.computeWorldMatrix(true);
-                    frog.verticalVelocity = 0;
-                    frog.IsGrounded = true;
-                    frogHitObstacle = true;
-                    break;
-                }
-                // Collision par le dessous (tête de la frog sous une plateforme)
-                else if (fdy > 0 && overlapsX && fBB.maximumWorld.y >= obstacleBottom && fBB.minimumWorld.y <= obstacleBottom) {
-                    frog.slimeCollider.position.y = obstacleBottom - frogHalfY;
-                    frog.slimeCollider.computeWorldMatrix(true);
-                    frog.verticalVelocity = 0;
-                    frog.IsGrounded = false;
-                    frogHitObstacle = true;
-                    break;
-                }
-            }
-
-            if (!frogHitObstacle) {
-                frog.IsGrounded = false;
-            }
-            // empêche un slime qui tombe de traverser un autre slime (collision verticale)
-            if (fdy <= 0) {
-                for (const other of slimes) {
-                    if (other === frog) continue;
-                    const oBB = other.slimeCollider.getBoundingInfo().boundingBox;
-                    const sBB = frog.slimeCollider.getBoundingInfo().boundingBox;
-                    const eps = 0.0005;
-                    const overlapX = sBB.maximumWorld.x > oBB.minimumWorld.x + eps && sBB.minimumWorld.x < oBB.maximumWorld.x - eps;
-                    const overlapY = sBB.maximumWorld.y > oBB.minimumWorld.y + eps && sBB.minimumWorld.y < oBB.maximumWorld.y - eps;
-                    if (overlapX && overlapY) {
-                        // replace le slime à son ancienne hauteur et annule la chute
-                        frog.slimeCollider.position.y = prevY;
-                        frog.slimeCollider.computeWorldMatrix(true);
-                        frog.verticalVelocity = 0;
-                        frog.IsGrounded = true;
-                        break;
-                    }
-                }
-
-            }
-            // garder les sprites alignés avec le collider
-            frog.sprite.position.copyFrom(frog.slimeCollider.position);
-            frog.attackCollider.position.copyFrom(frog.sprite.position);
-            frog.attackCollider.checkCollisions = true;
-        }
 
         function frogboucle(frog: Frog): void {
             // Si le frog est déjà mort, on ne fait plus rien
@@ -602,7 +428,6 @@ export class SceneCB {
             frog.attackCollider.position.copyFrom(frog.sprite.position);
             frog.attackCollider.checkCollisions = true;
         }
-
         function guepeboucle(guepe: Guepe): void {
             // Si le guepe est déjà mort, on ne fait plus rien
             if (guepe.isDead) {
@@ -681,132 +506,6 @@ export class SceneCB {
             guepe.attackCollider.position.y-=0.02;
             guepe.attackCollider.checkCollisions = true;
         }
-
-        function guepepurpleboucle(guepe: Guepepurple): void {
-            // Si le guepe est déjà mort, on ne fait plus rien
-            if (guepe.isDead) {
-                return;
-            }
-
-            // Dégâts reçus depuis l'attaque du joueur
-            if (guepe.attackCollider.intersectsMesh(attackCollider, false) && attackCollider.checkCollisions) {
-                guepe.guepeHealth -= 2;
-                guepe.isSuffering = true;
-                // on (ré)initialise un petit timer de souffrance
-                guepe.waittime = 20;
-                // pas de frame spéciale de "hit" : on garde l'animation idle (0..5)
-                guepe.sprite.playAnimation(0, 5, true, 100);
-                guepe.actionTime = 0;
-                guepe.isAttacking = false;
-            }
-
-            // mort du guepe
-            if (guepe.guepeHealth <= 0 && !guepe.isDead) {
-                guepe.isDead = true;
-                guepe.attackCollider.checkCollisions = false;
-                guepe.sprite.dispose();
-                guepe.slimeCollider.dispose();
-                guepe.attackCollider.dispose();
-                guepes.splice(guepes.indexOf(guepe), 1);
-                return;
-            }
-
-            if (guepe.isSuffering) {
-                // faire clignoter la guepe comme le joueur pendant quelques frames
-                if (guepe.waittime > 0) {
-                    guepe.waittime--;
-                    // clignotement simple: visible 3 frames sur 6
-                    guepe.sprite.isVisible = (guepe.waittime % 6) >= 3;
-                } else {
-                    guepe.isSuffering = false;
-                    guepe.sprite.isVisible = true;
-                }
-                const prevX = guepe.slimeCollider.position.x;
-                const prevY = guepe.slimeCollider.position.y;
-                guepe.slimeCollider.computeWorldMatrix(true);
-            } else {
-                // juste animer la guepe sans déplacement pour l'instant
-                if( !guepe.isAttacking && invincibilityFrames <= 0) {
-                    guepe.sprite.playAnimation(0, 5, false, 50, () => {  
-                        guepe.sprite.playAnimation(0, 5, true, 100);
-                        guepe.isAttacking = false;
-                    });
-                    guepe.waittime = 20;
-                    guepe.actionTime = 0;
-                    guepe.isAttacking = true;
-                }
-                if(guepe.isAttacking) {
-                    if(guepe.axe==0){
-                        const prevY = guepe.slimeCollider.position.y;
-                        const prevX = guepe.slimeCollider.position.x;
-                        if(guepe.slimeCollider.position.y >= guepe.initialPositiony + guepe.distance){
-                            guepe.isgoinigup=false;
-                        }
-                        else if(guepe.slimeCollider.position.y <= guepe.initialPositiony - guepe.distance){
-                            guepe.isgoinigup=true;
-                        }
-                        if((guepe.slimeCollider.position.y < guepe.initialPositiony + guepe.distance) && guepe.isgoinigup) {
-                            guepe.slimeCollider.position.y += 0.003;
-                        }
-                        else if(guepe.slimeCollider.position.y > guepe.initialPositiony - guepe.distance && !guepe.isgoinigup){
-                            guepe.slimeCollider.position.y -= 0.003;
-                        }
-                        guepe.slimeCollider.computeWorldMatrix(true);
-                        if (invincibilityFrames > 0) {
-                            const sBB = guepe.slimeCollider.getBoundingInfo().boundingBox;
-                            const pBB = playerCollider.getBoundingInfo().boundingBox;
-                            const eps = 0.0005;
-                            const overlapX = sBB.maximumWorld.x > pBB.minimumWorld.x + eps && sBB.minimumWorld.x < pBB.maximumWorld.x - eps;
-                            const overlapY = sBB.maximumWorld.y > pBB.minimumWorld.y + eps && sBB.minimumWorld.y < pBB.maximumWorld.y - eps;
-                            if (overlapX && overlapY) {
-                                guepe.slimeCollider.position.x = prevX;
-                                guepe.slimeCollider.position.y = prevY;
-                                guepe.slimeCollider.computeWorldMatrix(true);
-                            }
-                        }
-                    }
-                    else if(guepe.axe==1){
-                        const prevY = guepe.slimeCollider.position.y;
-                        const prevX = guepe.slimeCollider.position.x;
-                        if(guepe.slimeCollider.position.x >= guepe.initialPositionx + guepe.distance){
-                            guepe.isgoinigup=false;
-                        }
-                        else if(guepe.slimeCollider.position.x <= guepe.initialPositionx - guepe.distance){
-                            guepe.isgoinigup=true;
-                        }
-                        if((guepe.slimeCollider.position.x < guepe.initialPositionx + guepe.distance) && guepe.isgoinigup) {
-                            guepe.slimeCollider.position.x += 0.003;
-                        }
-                        else if(guepe.slimeCollider.position.x > guepe.initialPositionx - guepe.distance && !guepe.isgoinigup){
-                            guepe.slimeCollider.position.x -= 0.003;
-                        }
-                        guepe.slimeCollider.computeWorldMatrix(true);
-                        if (invincibilityFrames > 0) {
-                            const sBB = guepe.slimeCollider.getBoundingInfo().boundingBox;
-                            const pBB = playerCollider.getBoundingInfo().boundingBox;
-                            const eps = 0.0005;
-                            const overlapX = sBB.maximumWorld.x > pBB.minimumWorld.x + eps && sBB.minimumWorld.x < pBB.maximumWorld.x - eps;
-                            const overlapY = sBB.maximumWorld.y > pBB.minimumWorld.y + eps && sBB.minimumWorld.y < pBB.maximumWorld.y - eps;
-                            if (overlapX && overlapY) {
-                                guepe.slimeCollider.position.x = prevX;
-                                guepe.slimeCollider.position.y = prevY;
-                                guepe.slimeCollider.computeWorldMatrix(true);
-                            }
-                        }
-                    }
-                }
-                else{
-                    guepe.sprite.playAnimation(0, 5, true, 100);
-                }
-            }
-
-            // garder les colliders alignés avec le sprite
-            guepe.sprite.position.copyFrom(guepe.slimeCollider.position);
-            guepe.attackCollider.position.copyFrom(guepe.sprite.position);
-            guepe.sprite.position.y+=0.02;
-            guepe.attackCollider.checkCollisions = true;
-        }
-
         function slimeboucle(slime: Slime): void {
             // Si le slime est déjà mort, on ne fait plus rien
             if (slime.isDead) {
@@ -1244,12 +943,6 @@ export class SceneCB {
                             slime.slimeCollider.computeWorldMatrix(true);
                         }
                     }
-                    
-                    const groundAhead = hasGroundAhead(slime.slimeCollider, slime.sprite.position.x < lyrina.position.x ? 1 : -1);
-                    if (!groundAhead) {
-                        slime.slimeCollider.position.x = prevX;
-                        slime.slimeCollider.computeWorldMatrix(true);
-                    }
                 }
                 else {
                     // Déplacement continu sans hasard : la direction ne change
@@ -1520,13 +1213,6 @@ export class SceneCB {
                     // 20 frames après le saut du joueur.
                     for (const frog of frogs) {
                         frog.jumpDelay = 20;      // délai en frames
-                        frog.jumpTime = 0;        // on réinitialise le saut
-                        frog.baseY = frog.sprite.position.y; // hauteur de base
-                    }
-                    // Déclenche un saut "de réaction" des frogs
-                    // 20 frames après le saut du joueur.
-                    for (const frog of frogspurple) {
-                        frog.jumpDelay = 1;      // délai en frames
                         frog.jumpTime = 0;        // on réinitialise le saut
                         frog.baseY = frog.sprite.position.y; // hauteur de base
                     }
@@ -1834,10 +1520,6 @@ export class SceneCB {
             guepeboucle(guepe1);
             frogboucle(frog1);
             frogboucle(frog2);
-            frogpurpleboucle(frogpurple1);
-            frogpurpleboucle(frogpurple2);
-            guepepurpleboucle(guepepurple1);
-            guepepurpleboucle(guepepurple2);
         })
     }
 
