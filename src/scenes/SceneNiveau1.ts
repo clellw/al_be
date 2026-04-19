@@ -11,7 +11,7 @@ import { Frog } from "./Frog";
 import { Nuage } from "./Nuage";
 import { Frogpurple } from "./Frogpurple";
 import {Guepepurple} from "./Guepepurple";
-export class SceneCB {
+export class SceneNiveau1 {
     
     scene: Scene;
     engine: Engine;
