@@ -71,6 +71,18 @@ export class Guepe {
         sattackCollider.material.wireframe = true;
         // La guêpe est toujours en état d'attaque : sa hitbox doit
         sattackCollider.checkCollisions = false;
+        sattackCollider.metadata = {
+            kind: "guepe",
+            ownerId: id,
+            ownerSprite: slime,
+            ownerCollider: slimeCollider,
+        };
+        slimeCollider.metadata = {
+            kind: "guepe",
+            ownerId: id,
+            ownerSprite: slime,
+            ownerAttackCollider: sattackCollider,
+        };
         this.sprite = slime;
         this.spriteManager = SlimeManager;
         this.slimeCollider = slimeCollider;

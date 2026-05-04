@@ -3,6 +3,7 @@ import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilde
 export class Ground {
     public name: string;
     public lemesh: Mesh;
+    public tiles: Sprite[];
 
     constructor(name: string, scene: Scene, initialPosition: Vector3, sizeintitles: number, visible:boolean) {
         // largeur d'une tuile en unités monde (10 unités pour 68 tuiles sur le sol principal)
@@ -10,9 +11,9 @@ export class Ground {
 
         // Le mesh porte le nom passé au constructeur (ex: "block2")
         // et sa largeur correspond au nombre de tuiles demandé
-        const ground = MeshBuilder.CreateBox(name, {width: sizeintitles * tileWorldWidth, height: 0.1, depth: 0.5}, scene);
+        const ground = MeshBuilder.CreateBox(name, {width: (sizeintitles * tileWorldWidth)-0.15, height: 0.1, depth: 0.5}, scene);
         ground.position = initialPosition;
-        ground.position.y = -0.18;
+        ground.position.y = initialPosition.y;
 
         ground.checkCollisions = true;
         ground.isVisible = visible;
@@ -20,24 +21,44 @@ export class Ground {
         const groundMaterial = new StandardMaterial("groundMaterial", scene);
         groundMaterial.wireframe = true;
         ground.material = groundMaterial;
-        const spriteManager = new SpriteManager(
-            "tilesManager",
+        const middleTilesManager = new SpriteManager(
+            "tilesManagerMiddle",
             "./sprites/grass_m.png",
-            100,           // max number of sprites
-            96, 
+            10000,           // max number of sprites
+            96,
+            scene
+        );
+        const edgeTilesManager = new SpriteManager(
+            "tilesManagerEdge",
+            "./sprites/grass_c.png",
+            10000,
+            96,
             scene
         );
 
+        this.tiles = [];
+        (ground as Mesh).metadata = { kind: "ground", tiles: this.tiles };
+
         // Create a few tiles, centrés par rapport à initialPosition.x
         for (let i = 0; i < sizeintitles; i++) {
-            const tile = new Sprite("tile" + i, spriteManager);
+            let invertu = false;
+            const isEdgeTile = i === 0 || i === sizeintitles - 1;
+            const tile = new Sprite("tile" + i, isEdgeTile ? edgeTilesManager : middleTilesManager);
+            
             // même pattern que dans SceneCB, mais décalé par initialPosition.x
             const offset = - (sizeintitles - 1) * tileWorldWidth / 2 + i * tileWorldWidth;
             tile.position.x = initialPosition.x + offset;
-            tile.size = 0.15;
-            tile.position.y = -0.18;
+            tile.size = 0.1501;
+            tile.position.y = initialPosition.y;
+
+            if (i === sizeintitles-1) {
+                console.log("première tuile, on inverse l'UV pour que le bord 'côté extérieur' soit à gauche");
+                invertu = true; // première tuile à gauche : on inverse l'UV pour que le bord "côté extérieur" soit à gauche
+            }
             tile.position.z = -0.01;
             tile.cellIndex = 0; // choose tile from sprite sheet
+            tile.invertU = invertu;
+            this.tiles.push(tile);
         }
         
         // Adapter la taille du sprite à peu près à la largeur du mesh (2 unités)

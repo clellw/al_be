@@ -1,4 +1,4 @@
-import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3, PointerEventTypes, Matrix} from "@babylonjs/core"
+import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3, PointerEventTypes, KeyboardEventTypes, Matrix} from "@babylonjs/core"
 import * as GUI from '@babylonjs/gui'
 import { Slime } from "./Slime";
 import { Platforme } from "./Platforme";
@@ -12,11 +12,866 @@ import { Frog } from "./Frog";
 import { Nuage } from "./Nuage";
 import { Frogpurple } from "./Frogpurple";
 import {Guepepurple} from "./Guepepurple";
-export class SceneNiveau1 {
+
+type LevelObjectType = "ground" | "obstacle" | "obstacleFlying" | "obstacleInvisible" | "platform";
+type EnemyObjectType = "slime" | "slimerouge" | "guepe" | "guepepurple" | "frog" | "frogpurple";
+type EditorSpawnType = LevelObjectType | EnemyObjectType;
+
+type EnemyEntity = Slime | Slimerouge | Guepe | Guepepurple | Frog | Frogpurple;
+type GroundEnemyEntity = Slime | Slimerouge | Frog | Frogpurple;
+type AirEnemyEntity = Guepe | Guepepurple;
+
+type LevelObjectRecord = {
+    id: string;
+    type: LevelObjectType;
+    name: string;
+    position: Vector3;
+    mesh: Mesh;
+    tiles: Sprite[];
+    ownerSprite?: Sprite;
+    sizeintitles?: number;
+    widthincubes?: number;
+    heightincubes?: number;
+};
+
+type EnemyRecord = {
+    id: string;
+    type: EnemyObjectType;
+    name: string;
+    position: Vector3;
+    enemy: EnemyEntity;
+    slimeCollider: Mesh;
+    attackCollider: Mesh;
+    sprite: Sprite;
+    axe?: number;
+    distance?: number;
+    debut?: boolean;
+};
+
+export class SceneNiveau1Edit {
     
     scene: Scene;
     engine: Engine;
     devpoweractive: boolean;
+    private levelObjects: LevelObjectRecord[] = [];
+    private levelObjectCounter = 1;
+    private enemyObjects: EnemyRecord[] = [];
+    private enemyObjectCounter = 1;
+    private selectedLevelObjectId: string | null = null;
+    private selectedEnemyObjectId: string | null = null;
+    private levelEditorEnabled = true;
+    private enemiesPaused = false;
+    private levelEditorSpawnType: EditorSpawnType = "obstacle";
+    private levelEditorHUD: GUI.TextBlock | null = null;
+    private runtimeSlimes: GroundEnemyEntity[] = [];
+    private runtimeGuepes: AirEnemyEntity[] = [];
+    private runtimeFrogs: Frog[] = [];
+    private runtimeFrogsPurple: Frogpurple[] = [];
+
+    private formatLevelNumber(value: number): string {
+        return Number(value.toFixed(3)).toString();
+    }
+
+    private updateLevelEditorHUD(): void {
+        if (!this.levelEditorHUD) {
+            return;
+        }
+
+        const selectedLevel = this.levelObjects.find((obj) => obj.id === this.selectedLevelObjectId) ?? null;
+        const selectedEnemy = this.enemyObjects.find((obj) => obj.id === this.selectedEnemyObjectId) ?? null;
+
+        const selectedLabel = selectedLevel
+            ? `${selectedLevel.name} (${selectedLevel.type})`
+            : selectedEnemy
+            ? `${selectedEnemy.name} (${selectedEnemy.type})`
+            : "aucun";
+
+        const enemyHint = selectedEnemy && selectedEnemy.type === "guepepurple"
+            ? `\nGP: dist=${this.formatLevelNumber(selectedEnemy.distance ?? 0.17)} | axe=${selectedEnemy.axe ?? 0} | debut=${selectedEnemy.debut ? "true" : "false"}`
+            : "";
+
+        this.levelEditorHUD.text =
+            `EDITOR ${this.levelEditorEnabled ? "ON" : "OFF"}\n` +
+            `Ennemis: ${this.enemiesPaused ? "PAUSE" : "RUN"}\n` +
+            `Type spawn: ${this.levelEditorSpawnType}\n` +
+            `Selection: ${selectedLabel}${enemyHint}\n` +
+            `F1 on/off | F2 type | F3 ajoute | Tab suivant\n` +
+            `PageUp/PageDown largeur (GP: distance) | Home/F7 hauteur (GP: axe)\n` +
+            `F4 (GP): toggle debut\n` +
+            `Delete supprime | F6 export jeu | F9 export edit | F8 pause ennemis`;
+    }
+
+    private toggleEnemiesPause(): void {
+        this.enemiesPaused = !this.enemiesPaused;
+        this.updateLevelEditorHUD();
+        console.log(`Mode pause ennemis: ${this.enemiesPaused ? "ON" : "OFF"}`);
+    }
+
+    private setSelectedLevelObject(id: string | null): void {
+        this.selectedLevelObjectId = id;
+        if (id !== null) {
+            this.selectedEnemyObjectId = null;
+        }
+    }
+
+    private setSelectedEnemyObject(id: string | null): void {
+        this.selectedEnemyObjectId = id;
+        if (id !== null) {
+            this.selectedLevelObjectId = null;
+        }
+    }
+
+    private nextLevelObjectName(type: LevelObjectType): string {
+        const prefixes: Record<LevelObjectType, string> = {
+            ground: "block_edit",
+            obstacle: "obstacle_edit",
+            obstacleFlying: "obstaclevolant_edit",
+            obstacleInvisible: "obstacleinvisible_edit",
+            platform: "platform_edit"
+        };
+
+        const base = prefixes[type];
+        let idx = this.levelObjectCounter;
+        while (this.levelObjects.some((obj) => obj.name === `${base}${idx}`)) {
+            idx++;
+        }
+        this.levelObjectCounter = idx + 1;
+        return `${base}${idx}`;
+    }
+
+    private nextEnemyObjectName(type: EnemyObjectType): string {
+        const prefixes: Record<EnemyObjectType, string> = {
+            slime: "slime_edit",
+            slimerouge: "slimerouge_edit",
+            guepe: "guepe_edit",
+            guepepurple: "guepepurple_edit",
+            frog: "frog_edit",
+            frogpurple: "frogpurple_edit"
+        };
+
+        const base = prefixes[type];
+        let idx = this.enemyObjectCounter;
+        while (this.enemyObjects.some((obj) => obj.name === `${base}${idx}`)) {
+            idx++;
+        }
+        this.enemyObjectCounter = idx + 1;
+        return `${base}${idx}`;
+    }
+
+    private attachLevelObjectMetadata(obj: LevelObjectRecord): void {
+        const prevMeta: any = obj.mesh.metadata ?? {};
+        obj.mesh.metadata = {
+            ...prevMeta,
+            editorId: obj.id,
+            editorType: obj.type,
+            ownerSprite: obj.ownerSprite ?? prevMeta.ownerSprite,
+            tiles: obj.tiles.length > 0 ? obj.tiles : prevMeta.tiles
+        };
+    }
+
+    private attachEnemyObjectMetadata(obj: EnemyRecord): void {
+        const attach = (mesh: Mesh, part: "slimeCollider" | "attackCollider") => {
+            const prevMeta: any = mesh.metadata ?? {};
+            mesh.metadata = {
+                ...prevMeta,
+                enemyEditorId: obj.id,
+                enemyEditorType: obj.type,
+                enemyPart: part,
+                ownerSprite: obj.sprite,
+                ownerCollider: obj.slimeCollider
+            };
+        };
+
+        attach(obj.slimeCollider, "slimeCollider");
+        attach(obj.attackCollider, "attackCollider");
+    }
+
+    private addEnemyToRuntimeLists(enemy: EnemyEntity): void {
+        if (enemy instanceof Slime || enemy instanceof Slimerouge || enemy instanceof Frog || enemy instanceof Frogpurple) {
+            this.runtimeSlimes.push(enemy);
+        }
+
+        if (enemy instanceof Guepe || enemy instanceof Guepepurple) {
+            this.runtimeGuepes.push(enemy);
+        }
+
+        if (enemy instanceof Frog) {
+            this.runtimeFrogs.push(enemy);
+        }
+
+        if (enemy instanceof Frogpurple) {
+            this.runtimeFrogsPurple.push(enemy);
+        }
+    }
+
+    private removeEnemyFromRuntimeLists(enemy: EnemyEntity): void {
+        const removeOne = <T>(arr: T[], value: T) => {
+            const index = arr.indexOf(value);
+            if (index >= 0) {
+                arr.splice(index, 1);
+            }
+        };
+
+        removeOne(this.runtimeSlimes, enemy as GroundEnemyEntity);
+        removeOne(this.runtimeGuepes, enemy as AirEnemyEntity);
+        removeOne(this.runtimeFrogs, enemy as Frog);
+        removeOne(this.runtimeFrogsPurple, enemy as Frogpurple);
+    }
+
+    private spawnEnemyObject(
+        scene: Scene,
+        type: EnemyObjectType,
+        name: string,
+        position: Vector3,
+        options?: {
+            axe?: number;
+            distance?: number;
+            debut?: boolean;
+            id?: string;
+            addToList?: boolean;
+            addToRuntime?: boolean;
+        }
+    ): EnemyRecord {
+        let enemy: EnemyEntity;
+        const axe = options?.axe ?? 0;
+        const distance = options?.distance ?? 0.17;
+        const debut = options?.debut ?? true;
+
+        if (type === "slime") {
+            enemy = new Slime(name, scene, position.clone(), this.devpoweractive);
+        } else if (type === "slimerouge") {
+            enemy = new Slimerouge(name, scene, position.clone(), this.devpoweractive);
+        } else if (type === "guepe") {
+            enemy = new Guepe(name, scene, position.clone(), this.devpoweractive);
+        } else if (type === "guepepurple") {
+            enemy = new Guepepurple(name, scene, position.clone(), this.devpoweractive, axe, distance, debut);
+        } else if (type === "frog") {
+            enemy = new Frog(name, scene, position.clone(), this.devpoweractive);
+        } else {
+            enemy = new Frogpurple(name, scene, position.clone(), this.devpoweractive);
+        }
+
+        const record: EnemyRecord = {
+            id: options?.id ?? `enemyObj${this.enemyObjectCounter++}`,
+            type,
+            name,
+            position: position.clone(),
+            enemy,
+            slimeCollider: enemy.slimeCollider,
+            attackCollider: enemy.attackCollider,
+            sprite: enemy.sprite,
+            axe: type === "guepepurple" ? axe : undefined,
+            distance: type === "guepepurple" ? distance : undefined,
+            debut: type === "guepepurple" ? debut : undefined
+        };
+
+        this.attachEnemyObjectMetadata(record);
+
+        if (options?.addToRuntime !== false) {
+            this.addEnemyToRuntimeLists(enemy);
+        }
+
+        if (options?.addToList !== false) {
+            this.enemyObjects.push(record);
+        }
+
+        return record;
+    }
+
+    private setEnemyObjectPosition(record: EnemyRecord, x: number, y: number): void {
+        const z = record.position.z;
+        record.position = new Vector3(x, y, z);
+
+        if (record.type === "guepe") {
+            const guepe = record.enemy as Guepe;
+            guepe.sprite.position.x = x;
+            guepe.sprite.position.y = y;
+            guepe.slimeCollider.position.x = x;
+            guepe.slimeCollider.position.y = y - 0.02;
+            guepe.attackCollider.position.x = x;
+            guepe.attackCollider.position.y = y - 0.02;
+        } else if (record.type === "guepepurple") {
+            const guepePurple = record.enemy as Guepepurple;
+            guepePurple.slimeCollider.position.x = x;
+            guepePurple.slimeCollider.position.y = y;
+            guepePurple.sprite.position.copyFrom(guepePurple.slimeCollider.position);
+            guepePurple.sprite.position.y += 0.02;
+            guepePurple.attackCollider.position.copyFrom(guepePurple.sprite.position);
+            guepePurple.initialPositionx = x;
+            guepePurple.initialPositiony = y;
+        } else {
+            record.enemy.slimeCollider.position.x = x;
+            record.enemy.slimeCollider.position.y = y;
+            record.enemy.sprite.position.copyFrom(record.enemy.slimeCollider.position);
+            record.enemy.attackCollider.position.copyFrom(record.enemy.sprite.position);
+        }
+
+        record.enemy.slimeCollider.computeWorldMatrix(true);
+        record.enemy.attackCollider.computeWorldMatrix(true);
+    }
+
+    private destroyEnemyObject(record: EnemyRecord): void {
+        this.removeEnemyFromRuntimeLists(record.enemy);
+        record.enemy.attackCollider.checkCollisions = false;
+        record.enemy.sprite.dispose();
+        record.enemy.slimeCollider.dispose();
+        record.enemy.attackCollider.dispose();
+        record.enemy.spriteManager.dispose();
+    }
+
+    private rebuildEnemyObject(scene: Scene, record: EnemyRecord): EnemyRecord {
+        const index = this.enemyObjects.findIndex((obj) => obj.id === record.id);
+        if (index === -1) {
+            return record;
+        }
+
+        const snapshot = {
+            id: record.id,
+            type: record.type,
+            name: record.name,
+            position: record.position.clone(),
+            axe: record.axe,
+            distance: record.distance,
+            debut: record.debut
+        };
+
+        this.destroyEnemyObject(record);
+
+        const rebuilt = this.spawnEnemyObject(scene, snapshot.type, snapshot.name, snapshot.position, {
+            id: snapshot.id,
+            addToList: false,
+            axe: snapshot.axe,
+            distance: snapshot.distance,
+            debut: snapshot.debut
+        });
+
+        this.enemyObjects[index] = rebuilt;
+        if (this.selectedEnemyObjectId === record.id) {
+            this.selectedEnemyObjectId = rebuilt.id;
+        }
+
+        return rebuilt;
+    }
+
+    private getSelectedEnemyObject(): EnemyRecord | null {
+        return this.enemyObjects.find((obj) => obj.id === this.selectedEnemyObjectId) ?? null;
+    }
+
+    private spawnLevelObject(
+        scene: Scene,
+        type: LevelObjectType,
+        name: string,
+        position: Vector3,
+        options?: {
+            sizeintitles?: number;
+            widthincubes?: number;
+            heightincubes?: number;
+            id?: string;
+            addToList?: boolean;
+        }
+    ): LevelObjectRecord {
+        let mesh: Mesh;
+        let tiles: Sprite[] = [];
+        let ownerSprite: Sprite | undefined;
+
+        let sizeintitles = options?.sizeintitles;
+        let widthincubes = options?.widthincubes;
+        let heightincubes = options?.heightincubes;
+
+        if (type === "ground") {
+            sizeintitles = Math.max(1, Math.round(sizeintitles ?? 40));
+            const ground = new Ground(name, scene, position.clone(), sizeintitles, this.devpoweractive);
+            mesh = ground.lemesh;
+            tiles = ground.tiles ?? [];
+        } else if (type === "obstacle") {
+            widthincubes = Math.max(1, Math.round(widthincubes ?? 6));
+            heightincubes = Math.max(1, Math.round(heightincubes ?? 2));
+            const obstacle = new Obstacles(name, scene, position.clone(), widthincubes, heightincubes, this.devpoweractive);
+            mesh = obstacle.lemesh;
+            tiles = obstacle.tiles ?? [];
+        } else if (type === "obstacleFlying") {
+            widthincubes = Math.max(1, Math.round(widthincubes ?? 8));
+            heightincubes = Math.max(1, Math.round(heightincubes ?? 1));
+            const obstacleFlying = new Obstaclesflying(name, scene, position.clone(), widthincubes, heightincubes, this.devpoweractive);
+            mesh = obstacleFlying.lemesh;
+            tiles = obstacleFlying.tiles ?? [];
+        } else if (type === "obstacleInvisible") {
+            widthincubes = Math.max(1, Math.round(widthincubes ?? 3));
+            heightincubes = Math.max(1, Math.round(heightincubes ?? 3));
+            const obstacleInvisible = new Obstaclesinvisibles(name, scene, position.clone(), widthincubes, heightincubes, this.devpoweractive);
+            mesh = obstacleInvisible.lemesh;
+        } else {
+            const platform = new Platforme(name, scene, position.clone(), this.devpoweractive);
+            mesh = platform.lemesh;
+            ownerSprite = platform.sprite;
+        }
+
+        const meshMeta: any = mesh.metadata ?? {};
+        if (tiles.length === 0 && Array.isArray(meshMeta.tiles)) {
+            tiles = meshMeta.tiles as Sprite[];
+        }
+        if (!ownerSprite && meshMeta.ownerSprite) {
+            ownerSprite = meshMeta.ownerSprite as Sprite;
+        }
+
+        const record: LevelObjectRecord = {
+            id: options?.id ?? `levelObj${this.levelObjectCounter++}`,
+            type,
+            name,
+            position: mesh.position.clone(),
+            mesh,
+            tiles,
+            ownerSprite,
+            sizeintitles,
+            widthincubes,
+            heightincubes
+        };
+
+        this.attachLevelObjectMetadata(record);
+
+        if (options?.addToList !== false) {
+            this.levelObjects.push(record);
+        }
+
+        return record;
+    }
+
+    private destroyLevelObject(record: LevelObjectRecord): void {
+        const disposedSprites = new Set<Sprite>();
+        if (record.ownerSprite) {
+            record.ownerSprite.dispose();
+            disposedSprites.add(record.ownerSprite);
+        }
+        for (const tile of record.tiles) {
+            if (!disposedSprites.has(tile)) {
+                tile.dispose();
+            }
+        }
+        record.mesh.dispose();
+    }
+
+    private rebuildLevelObject(scene: Scene, record: LevelObjectRecord): LevelObjectRecord {
+        const index = this.levelObjects.findIndex((obj) => obj.id === record.id);
+        if (index === -1) {
+            return record;
+        }
+
+        const snapshot = {
+            id: record.id,
+            type: record.type,
+            name: record.name,
+            position: record.position.clone(),
+            sizeintitles: record.sizeintitles,
+            widthincubes: record.widthincubes,
+            heightincubes: record.heightincubes
+        };
+
+        this.destroyLevelObject(record);
+
+        const rebuilt = this.spawnLevelObject(scene, snapshot.type, snapshot.name, snapshot.position, {
+            id: snapshot.id,
+            addToList: false,
+            sizeintitles: snapshot.sizeintitles,
+            widthincubes: snapshot.widthincubes,
+            heightincubes: snapshot.heightincubes
+        });
+
+        this.levelObjects[index] = rebuilt;
+        if (this.selectedLevelObjectId === record.id) {
+            this.selectedLevelObjectId = rebuilt.id;
+        }
+
+        return rebuilt;
+    }
+
+    private getSelectedLevelObject(): LevelObjectRecord | null {
+        return this.levelObjects.find((obj) => obj.id === this.selectedLevelObjectId) ?? null;
+    }
+
+    private selectNextEditableObject(): LevelObjectRecord | EnemyRecord | null {
+        const merged = [
+            ...this.levelObjects.map((obj) => ({ kind: "level" as const, id: obj.id })),
+            ...this.enemyObjects.map((obj) => ({ kind: "enemy" as const, id: obj.id }))
+        ];
+
+        if (merged.length === 0) {
+            this.selectedLevelObjectId = null;
+            this.selectedEnemyObjectId = null;
+            this.updateLevelEditorHUD();
+            return null;
+        }
+
+        const currentKind = this.selectedEnemyObjectId ? "enemy" : this.selectedLevelObjectId ? "level" : null;
+        const currentId = this.selectedEnemyObjectId ?? this.selectedLevelObjectId;
+
+        if (!currentKind || !currentId) {
+            const first = merged[0];
+            if (first.kind === "level") {
+                this.setSelectedLevelObject(first.id);
+                this.updateLevelEditorHUD();
+                return this.levelObjects.find((obj) => obj.id === first.id) ?? null;
+            }
+            this.setSelectedEnemyObject(first.id);
+            this.updateLevelEditorHUD();
+            return this.enemyObjects.find((obj) => obj.id === first.id) ?? null;
+        }
+
+        const currentIndex = merged.findIndex((entry) => entry.kind === currentKind && entry.id === currentId);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % merged.length : 0;
+        const next = merged[nextIndex];
+
+        if (next.kind === "level") {
+            this.setSelectedLevelObject(next.id);
+            this.updateLevelEditorHUD();
+            return this.levelObjects.find((obj) => obj.id === next.id) ?? null;
+        }
+
+        this.setSelectedEnemyObject(next.id);
+        this.updateLevelEditorHUD();
+        return this.enemyObjects.find((obj) => obj.id === next.id) ?? null;
+    }
+
+    private resizeSelectedObject(scene: Scene, axis: "width" | "height", delta: number): void {
+        const selectedLevel = this.getSelectedLevelObject();
+        if (selectedLevel) {
+            if (selectedLevel.type === "platform") {
+                console.log("Plateforme: taille fixe (pas de width/height en constructeur).");
+                return;
+            }
+
+            if (selectedLevel.type === "ground") {
+                if (axis === "height") {
+                    console.log("Ground: seule la largeur (sizeintitles) est modifiable.");
+                    return;
+                }
+                selectedLevel.sizeintitles = Math.max(1, Math.round((selectedLevel.sizeintitles ?? 1) + delta));
+                this.rebuildLevelObject(scene, selectedLevel);
+                this.updateLevelEditorHUD();
+                return;
+            }
+
+            if (axis === "width") {
+                selectedLevel.widthincubes = Math.max(1, Math.round((selectedLevel.widthincubes ?? 1) + delta));
+            } else {
+                selectedLevel.heightincubes = Math.max(1, Math.round((selectedLevel.heightincubes ?? 1) + delta));
+            }
+
+            this.rebuildLevelObject(scene, selectedLevel);
+            this.updateLevelEditorHUD();
+            return;
+        }
+
+        const selectedEnemy = this.getSelectedEnemyObject();
+        if (!selectedEnemy) {
+            return;
+        }
+
+        if (selectedEnemy.type !== "guepepurple") {
+            console.log("Cet ennemi n'a pas de paramètre largeur/hauteur éditable.");
+            return;
+        }
+
+        if (axis === "width") {
+            const nextDistance = (selectedEnemy.distance ?? 0.17) + delta * 0.01;
+            selectedEnemy.distance = Math.max(0.01, Number(nextDistance.toFixed(3)));
+        } else {
+            selectedEnemy.axe = selectedEnemy.axe === 0 ? 1 : 0;
+        }
+
+        this.rebuildEnemyObject(scene, selectedEnemy);
+        this.updateLevelEditorHUD();
+    }
+
+    private toggleSelectedEnemyStartDirection(scene: Scene): void {
+        const selectedEnemy = this.getSelectedEnemyObject();
+        if (!selectedEnemy || selectedEnemy.type !== "guepepurple") {
+            console.log("Sélectionne une guepepurple pour modifier 'debut'.");
+            return;
+        }
+
+        selectedEnemy.debut = !(selectedEnemy.debut ?? true);
+        this.rebuildEnemyObject(scene, selectedEnemy);
+        this.updateLevelEditorHUD();
+    }
+
+    private addNewObjectFromCamera(scene: Scene): void {
+        const camera = scene.activeCamera;
+        const baseX = camera ? camera.position.x : 0;
+        const baseY = camera ? camera.position.y : 0;
+        const isLevelSpawn =
+            this.levelEditorSpawnType === "ground" ||
+            this.levelEditorSpawnType === "obstacle" ||
+            this.levelEditorSpawnType === "obstacleFlying" ||
+            this.levelEditorSpawnType === "obstacleInvisible" ||
+            this.levelEditorSpawnType === "platform";
+
+        if (isLevelSpawn) {
+            const levelType = this.levelEditorSpawnType as LevelObjectType;
+            const spawnName = this.nextLevelObjectName(levelType);
+            let spawnPos = new Vector3(baseX, baseY, -0.0101);
+            let options: { sizeintitles?: number; widthincubes?: number; heightincubes?: number } = {};
+
+            switch (levelType) {
+                case "ground":
+                    spawnPos = new Vector3(baseX, -0.28, 0);
+                    options = { sizeintitles: 30 };
+                    break;
+                case "obstacle":
+                    options = { widthincubes: 6, heightincubes: 2 };
+                    break;
+                case "obstacleFlying":
+                    options = { widthincubes: 8, heightincubes: 1 };
+                    break;
+                case "obstacleInvisible":
+                    spawnPos = new Vector3(baseX, baseY, 0);
+                    options = { widthincubes: 3, heightincubes: 3 };
+                    break;
+                case "platform":
+                    spawnPos = new Vector3(baseX, baseY, 0);
+                    break;
+            }
+
+            const created = this.spawnLevelObject(scene, levelType, spawnName, spawnPos, options);
+            this.setSelectedLevelObject(created.id);
+            this.updateLevelEditorHUD();
+            console.log(`Ajouté: ${created.name} (${created.type})`);
+            return;
+        }
+
+        const enemyType = this.levelEditorSpawnType as EnemyObjectType;
+        const spawnName = this.nextEnemyObjectName(enemyType);
+        let spawnPos = new Vector3(baseX, baseY, -0.0099);
+        let enemyOptions: { axe?: number; distance?: number; debut?: boolean } = {};
+
+        if (enemyType === "guepe" || enemyType === "guepepurple") {
+            spawnPos = new Vector3(baseX, baseY + 0.5, -0.0099);
+        }
+
+        if (enemyType === "guepepurple") {
+            enemyOptions = { axe: 0, distance: 0.17, debut: true };
+        }
+
+        const createdEnemy = this.spawnEnemyObject(scene, enemyType, spawnName, spawnPos, enemyOptions);
+        this.setSelectedEnemyObject(createdEnemy.id);
+        this.updateLevelEditorHUD();
+        console.log(`Ajouté: ${createdEnemy.name} (${createdEnemy.type})`);
+    }
+
+    private deleteSelectedObject(): void {
+        const selectedLevel = this.getSelectedLevelObject();
+        if (selectedLevel) {
+            const index = this.levelObjects.findIndex((obj) => obj.id === selectedLevel.id);
+            if (index >= 0) {
+                this.destroyLevelObject(selectedLevel);
+                this.levelObjects.splice(index, 1);
+                if (this.levelObjects.length > 0) {
+                    const nextIndex = Math.min(index, this.levelObjects.length - 1);
+                    this.setSelectedLevelObject(this.levelObjects[nextIndex].id);
+                } else {
+                    this.setSelectedLevelObject(null);
+                }
+                this.updateLevelEditorHUD();
+            }
+            return;
+        }
+
+        const selectedEnemy = this.getSelectedEnemyObject();
+        if (!selectedEnemy) {
+            return;
+        }
+
+        const enemyIndex = this.enemyObjects.findIndex((obj) => obj.id === selectedEnemy.id);
+        if (enemyIndex === -1) {
+            return;
+        }
+
+        this.destroyEnemyObject(selectedEnemy);
+        this.enemyObjects.splice(enemyIndex, 1);
+        if (this.enemyObjects.length > 0) {
+            const nextIndex = Math.min(enemyIndex, this.enemyObjects.length - 1);
+            this.setSelectedEnemyObject(this.enemyObjects[nextIndex].id);
+        } else {
+            this.setSelectedEnemyObject(null);
+        }
+        this.updateLevelEditorHUD();
+    }
+
+    private buildCreateLine(record: LevelObjectRecord): string {
+        const x = this.formatLevelNumber(record.position.x);
+        const y = this.formatLevelNumber(record.position.y);
+        const z = this.formatLevelNumber(record.position.z);
+
+        if (record.type === "ground") {
+            return `const ${record.name} = new Ground("${record.name}", this.scene, new Vector3(${x}, ${y}, ${z}), ${record.sizeintitles ?? 1},this.devpoweractive);`;
+        }
+        if (record.type === "obstacle") {
+            return `const ${record.name} = new Obstacles("${record.name}", this.scene, new Vector3(${x}, ${y}, ${z}), ${record.widthincubes ?? 1}, ${record.heightincubes ?? 1},this.devpoweractive);`;
+        }
+        if (record.type === "obstacleFlying") {
+            return `const ${record.name} = new Obstaclesflying("${record.name}", this.scene, new Vector3(${x}, ${y}, ${z}), ${record.widthincubes ?? 1}, ${record.heightincubes ?? 1},this.devpoweractive);`;
+        }
+        if (record.type === "obstacleInvisible") {
+            return `const ${record.name} = new Obstaclesinvisibles("${record.name}", this.scene, new Vector3(${x}, ${y}, ${z}), ${record.widthincubes ?? 1}, ${record.heightincubes ?? 1},this.devpoweractive);`;
+        }
+        return `const ${record.name} = new Platforme("${record.name}", this.scene, new Vector3(${x}, ${y}, ${z}),this.devpoweractive);`;
+    }
+
+    private buildEnemyCreateLine(record: EnemyRecord): string {
+        const x = this.formatLevelNumber(record.position.x);
+        const y = this.formatLevelNumber(record.position.y);
+        const z = this.formatLevelNumber(record.position.z);
+
+        if (record.type === "slime") {
+            return `const ${record.name} = new Slime('${record.name}', scene, new Vector3(${x}, ${y}, ${z}),this.devpoweractive);`;
+        }
+        if (record.type === "slimerouge") {
+            return `const ${record.name} = new Slimerouge('${record.name}', scene, new Vector3(${x}, ${y}, ${z}),this.devpoweractive);`;
+        }
+        if (record.type === "guepe") {
+            return `const ${record.name} = new Guepe('${record.name}', scene, new Vector3(${x}, ${y}, ${z}),this.devpoweractive);`;
+        }
+        if (record.type === "guepepurple") {
+            return `const ${record.name} = new Guepepurple('${record.name}', scene, new Vector3(${x}, ${y}, ${z}),this.devpoweractive,${record.axe ?? 0},${this.formatLevelNumber(record.distance ?? 0.17)},${record.debut ? "true" : "false"});`;
+        }
+        if (record.type === "frog") {
+            return `const ${record.name} = new Frog('${record.name}', scene, new Vector3(${x}, ${y}, ${z}),this.devpoweractive);`;
+        }
+        return `const ${record.name} = new Frogpurple('${record.name}', scene, new Vector3(${x}, ${y}, ${z}),this.devpoweractive);`;
+    }
+
+    private buildLevelEditSpawnLine(record: LevelObjectRecord): string {
+        const x = this.formatLevelNumber(record.position.x);
+        const y = this.formatLevelNumber(record.position.y);
+        const z = this.formatLevelNumber(record.position.z);
+
+        if (record.type === "ground") {
+            return `this.spawnLevelObject(scene, "ground", "${record.name}", new Vector3(${x}, ${y}, ${z}), { sizeintitles: ${record.sizeintitles ?? 1} });`;
+        }
+        if (record.type === "obstacle") {
+            return `this.spawnLevelObject(scene, "obstacle", "${record.name}", new Vector3(${x}, ${y}, ${z}), { widthincubes: ${record.widthincubes ?? 1}, heightincubes: ${record.heightincubes ?? 1} });`;
+        }
+        if (record.type === "obstacleFlying") {
+            return `this.spawnLevelObject(scene, "obstacleFlying", "${record.name}", new Vector3(${x}, ${y}, ${z}), { widthincubes: ${record.widthincubes ?? 1}, heightincubes: ${record.heightincubes ?? 1} });`;
+        }
+        if (record.type === "obstacleInvisible") {
+            return `this.spawnLevelObject(scene, "obstacleInvisible", "${record.name}", new Vector3(${x}, ${y}, ${z}), { widthincubes: ${record.widthincubes ?? 1}, heightincubes: ${record.heightincubes ?? 1} });`;
+        }
+        return `this.spawnLevelObject(scene, "platform", "${record.name}", new Vector3(${x}, ${y}, ${z}));`;
+    }
+
+    private buildEnemyEditSpawnLine(record: EnemyRecord): string {
+        const x = this.formatLevelNumber(record.position.x);
+        const y = this.formatLevelNumber(record.position.y);
+        const z = this.formatLevelNumber(record.position.z);
+
+        if (record.type === "guepepurple") {
+            return `this.spawnEnemyObject(scene, "guepepurple", "${record.name}", new Vector3(${x}, ${y}, ${z}), { axe: ${record.axe ?? 0}, distance: ${this.formatLevelNumber(record.distance ?? 0.17)}, debut: ${record.debut ? "true" : "false"} });`;
+        }
+        return `this.spawnEnemyObject(scene, "${record.type}", "${record.name}", new Vector3(${x}, ${y}, ${z}));`;
+    }
+
+    private copyExportToClipboard(code: string, label: string): void {
+        console.log(`===== ${label} =====`);
+        console.log(code);
+
+        if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(() => {
+                console.log(`${label} copié dans le presse-papiers.`);
+            }).catch(() => {
+                console.log(`Impossible de copier automatiquement ${label}, mais le code est affiché dans la console.`);
+            });
+        }
+    }
+
+    private exportLevelCode(): void {
+        const lines: string[] = [];
+        lines.push("async CreateEnvironment(scene:Scene): Promise<void> {");
+        lines.push("");
+
+        for (const record of this.levelObjects) {
+            lines.push(`    ${this.buildCreateLine(record)}`);
+        }
+
+        lines.push("");
+        lines.push("    const skybox = Mesh.CreateBox(\"BackgroundSkybox\", 500, scene, undefined, Mesh.BACKSIDE);");
+        lines.push("}");
+
+        lines.push("");
+        lines.push("// ===== ENNEMIS (CreateMainCharacter) =====");
+        for (const record of this.enemyObjects) {
+            lines.push(this.buildEnemyCreateLine(record));
+        }
+
+        const slimesList = this.enemyObjects
+            .filter((record) => record.type === "slime" || record.type === "slimerouge" || record.type === "frog" || record.type === "frogpurple")
+            .map((record) => record.name)
+            .join(", ");
+
+        const guepesList = this.enemyObjects
+            .filter((record) => record.type === "guepe" || record.type === "guepepurple")
+            .map((record) => record.name)
+            .join(", ");
+
+        const frogsList = this.enemyObjects
+            .filter((record) => record.type === "frog")
+            .map((record) => record.name)
+            .join(", ");
+
+        const frogsPurpleList = this.enemyObjects
+            .filter((record) => record.type === "frogpurple")
+            .map((record) => record.name)
+            .join(", ");
+
+        lines.push("");
+        lines.push(`const slimes = [${slimesList}];`);
+        lines.push(`const guepes = [${guepesList}];`);
+        lines.push(`const frogs = [${frogsList}];`);
+        lines.push(`const frogspurple = [${frogsPurpleList}];`);
+
+        const code = lines.join("\n");
+        this.copyExportToClipboard(code, "CODE NIVEAU (format jeu)");
+    }
+
+    private exportLevelCodeSceneNiveau1Edit(): void {
+        const lines: string[] = [];
+        lines.push("// ===== FORMAT SCENENIVEAU1EDIT =====");
+        lines.push("// À coller dans CreateEnvironment(scene)");
+        for (const record of this.levelObjects) {
+            lines.push(this.buildLevelEditSpawnLine(record));
+        }
+
+        lines.push("");
+        lines.push("// À coller dans CreateMainCharacter(scene)");
+        for (const record of this.enemyObjects) {
+            lines.push(this.buildEnemyEditSpawnLine(record));
+        }
+
+        lines.push("");
+        lines.push("const slimes = this.runtimeSlimes;");
+        lines.push("const guepes = this.runtimeGuepes;");
+        lines.push("const frogs = this.runtimeFrogs;");
+        lines.push("const frogspurple = this.runtimeFrogsPurple;");
+
+        const code = lines.join("\n");
+        this.copyExportToClipboard(code, "CODE NIVEAU (format SceneNiveau1Edit)");
+    }
+
+    private findLevelObjectFromMesh(mesh: Mesh): LevelObjectRecord | null {
+        const meta: any = mesh.metadata ?? {};
+        if (meta.editorId) {
+            return this.levelObjects.find((obj) => obj.id === meta.editorId) ?? null;
+        }
+        return this.levelObjects.find((obj) => obj.mesh === mesh || obj.name === mesh.name) ?? null;
+    }
+
+    private findEnemyObjectFromMesh(mesh: Mesh): EnemyRecord | null {
+        const meta: any = mesh.metadata ?? {};
+        if (meta.enemyEditorId) {
+            return this.enemyObjects.find((obj) => obj.id === meta.enemyEditorId) ?? null;
+        }
+
+        return this.enemyObjects.find((obj) => obj.slimeCollider === mesh || obj.attackCollider === mesh) ?? null;
+    }
 
     constructor(private canvas:HTMLCanvasElement){
         this.devpoweractive = true;
@@ -54,99 +909,219 @@ export class SceneNiveau1 {
         this.CreateEnvironment(scene);
         this.CreateDialog(scene);
 
-        // --- ÉDITION D'OBSTACLES VOLANTS À LA SOURIS ---
-        // Permet de cliquer sur un obstacle volant (ex: obstaclevolant2),
-        // de le déplacer à la souris et d'afficher dans la console les
-        // coordonnées Vector3 à utiliser dans le code.
-        let draggedObstacle: Mesh | null = null;
-        let draggedObstacleLastPos: Vector3 | null = null;
+        // --- ÉDITEUR DE NIVEAU COMPLET ---
+        // Déplacement souris: objets de niveau + guêpes simples.
+        // Raccourcis clavier: F1/F2/F3/Tab/Delete/PageUp/PageDown/Home/F7/F6/F8/F9.
+        let draggedMesh: Mesh | null = null;
 
         scene.onPointerObservable.add((pointerInfo) => {
-            if (this.devpoweractive){
-                switch (pointerInfo.type) {
-                    case PointerEventTypes.POINTERDOWN: {
-                        const pick = pointerInfo.pickInfo;
-                        if (pick && pick.hit && pick.pickedMesh) {
-                            const mesh = pick.pickedMesh as Mesh;
-                            const meta: any = mesh.metadata;
-                            const isDecor = mesh.name.startsWith("obstacle") || mesh.name.startsWith("platform");
-                            const isSimpleGuepe = meta && meta.kind === "guepe";
+            if (!this.devpoweractive || !this.levelEditorEnabled) {
+                return;
+            }
 
-                            // On déplace le décor et les guêpes simples, mais pas les guêpes violettes.
-                            if (isDecor || isSimpleGuepe) {
-                                draggedObstacle = mesh;
-                                draggedObstacleLastPos = mesh.position.clone();
-                            }
-                        }
+            switch (pointerInfo.type) {
+                case PointerEventTypes.POINTERDOWN: {
+                    const pick = pointerInfo.pickInfo;
+                    if (!pick || !pick.hit || !pick.pickedMesh) {
                         break;
                     }
-                    case PointerEventTypes.POINTERMOVE: {
-                        if (draggedObstacle && scene.activeCamera) {
-                            // Ray depuis la souris
-                            const ray = scene.createPickingRay(
-                                scene.pointerX,
-                                scene.pointerY,
-                                Matrix.Identity(),
-                                scene.activeCamera as Camera
-                            );
-                            const dirZ = ray.direction.z;
-                            // On projette le rayon sur le plan z = position.z de l'obstacle
-                            if (Math.abs(dirZ) > 1e-6) {
-                                const t = (draggedObstacle.position.z - ray.origin.z) / dirZ;
-                                if (t > 0) {
-                                    const hit = ray.origin.add(ray.direction.scale(t));
 
-                                    // déplacement du mesh
-                                    const oldPos = draggedObstacle.position.clone();
-                                    draggedObstacle.position.x = hit.x;
-                                    draggedObstacle.position.y = hit.y;
+                    const mesh = pick.pickedMesh as Mesh;
+                    const object = this.findLevelObjectFromMesh(mesh);
 
-                                    // déplacement des sprites associés (tiles) avec le même delta
-                                    const dx = draggedObstacle.position.x - oldPos.x;
-                                    const dy = draggedObstacle.position.y - oldPos.y;
-                                    const meta: any = (draggedObstacle as any).metadata;
-                                    if (meta && meta.kind === "guepe") {
-                                        const ownerSprite = meta.ownerSprite as Sprite | undefined;
-                                        const ownerCollider = meta.ownerCollider as Mesh | undefined;
-
-                                        if (ownerSprite) {
-                                            ownerSprite.position.x += dx;
-                                            ownerSprite.position.y += dy;
-                                        }
-
-                                        if (ownerCollider) {
-                                            ownerCollider.position.x += dx;
-                                            ownerCollider.position.y += dy;
-                                        }
-                                    }
-
-                                    if (meta && Array.isArray(meta.tiles)) {
-                                        for (const tile of meta.tiles) {
-                                            tile.position.x += dx;
-                                            tile.position.y += dy;
-                                        }
-                                    }
-
-                                    draggedObstacleLastPos = draggedObstacle.position.clone();
-                                }
-                            }
-                        }
+                    if (object) {
+                        this.setSelectedLevelObject(object.id);
+                        this.updateLevelEditorHUD();
+                        draggedMesh = object.mesh;
                         break;
                     }
-                    case PointerEventTypes.POINTERUP: {
-                        if (draggedObstacle) {
-                            const p = draggedObstacle.position;
-                            console.log(
-                                `Nouvelle position pour ${draggedObstacle.name}: new Vector3(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`
-                            );
-                            draggedObstacle = null;
-                            draggedObstacleLastPos = null;
-                        }
+
+                    const enemyObject = this.findEnemyObjectFromMesh(mesh);
+                    if (enemyObject) {
+                        this.setSelectedEnemyObject(enemyObject.id);
+                        this.updateLevelEditorHUD();
+                        draggedMesh = mesh;
+                    }
+                    break;
+                }
+                case PointerEventTypes.POINTERMOVE: {
+                    if (!draggedMesh || !scene.activeCamera) {
                         break;
                     }
+
+                    const ray = scene.createPickingRay(
+                        scene.pointerX,
+                        scene.pointerY,
+                        Matrix.Identity(),
+                        scene.activeCamera as Camera
+                    );
+
+                    const dirZ = ray.direction.z;
+                    if (Math.abs(dirZ) <= 1e-6) {
+                        break;
+                    }
+
+                    const t = (draggedMesh.position.z - ray.origin.z) / dirZ;
+                    if (t <= 0) {
+                        break;
+                    }
+
+                    const hit = ray.origin.add(ray.direction.scale(t));
+
+                    const enemyObject = this.findEnemyObjectFromMesh(draggedMesh);
+                    if (enemyObject) {
+                        this.setEnemyObjectPosition(enemyObject, hit.x, hit.y);
+                        break;
+                    }
+
+                    const oldPos = draggedMesh.position.clone();
+                    draggedMesh.position.x = hit.x;
+                    draggedMesh.position.y = hit.y;
+
+                    const dx = draggedMesh.position.x - oldPos.x;
+                    const dy = draggedMesh.position.y - oldPos.y;
+
+                    const meta: any = draggedMesh.metadata;
+                    const ownerSprite = meta?.ownerSprite as Sprite | undefined;
+                    const ownerCollider = meta?.ownerCollider as Mesh | undefined;
+                    const tiles = Array.isArray(meta?.tiles) ? (meta.tiles as Sprite[]) : [];
+
+                    if (ownerSprite) {
+                        ownerSprite.position.x += dx;
+                        ownerSprite.position.y += dy;
+                    }
+
+                    if (ownerCollider) {
+                        ownerCollider.position.x += dx;
+                        ownerCollider.position.y += dy;
+                    }
+
+                    for (const tile of tiles) {
+                        tile.position.x += dx;
+                        tile.position.y += dy;
+                    }
+
+                    const object = this.findLevelObjectFromMesh(draggedMesh);
+                    if (object) {
+                        object.position.copyFrom(draggedMesh.position);
+                    }
+                    break;
+                }
+                case PointerEventTypes.POINTERUP: {
+                    if (draggedMesh) {
+                        const levelObject = this.findLevelObjectFromMesh(draggedMesh);
+                        const enemyObject = this.findEnemyObjectFromMesh(draggedMesh);
+                        const p = levelObject ? levelObject.position : enemyObject ? enemyObject.position : draggedMesh.position;
+                        console.log(
+                            `Position ${draggedMesh.name}: new Vector3(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`
+                        );
+                    }
+                    draggedMesh = null;
+                    break;
                 }
             }
-        });//fin d edition
+        });
+
+        const spawnTypes: EditorSpawnType[] = ["ground", "obstacle", "obstacleFlying", "obstacleInvisible", "platform", "slime", "slimerouge", "guepe", "guepepurple", "frog", "frogpurple"];
+        let spawnTypeIndex = spawnTypes.indexOf(this.levelEditorSpawnType);
+        if (spawnTypeIndex < 0) {
+            spawnTypeIndex = 0;
+            this.levelEditorSpawnType = spawnTypes[0];
+        }
+
+        scene.onKeyboardObservable.add((keyboardInfo) => {
+            if (!this.devpoweractive || keyboardInfo.type !== KeyboardEventTypes.KEYDOWN) {
+                return;
+            }
+
+            const key = keyboardInfo.event.key.toLowerCase();
+
+            if (key === "f1") {
+                this.levelEditorEnabled = !this.levelEditorEnabled;
+                this.updateLevelEditorHUD();
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "f8") {
+                this.toggleEnemiesPause();
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (!this.levelEditorEnabled) {
+                return;
+            }
+
+            if (key === "f2") {
+                spawnTypeIndex = (spawnTypeIndex + 1) % spawnTypes.length;
+                this.levelEditorSpawnType = spawnTypes[spawnTypeIndex];
+                this.updateLevelEditorHUD();
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "f3") {
+                this.addNewObjectFromCamera(scene);
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "tab") {
+                this.selectNextEditableObject();
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "delete") {
+                this.deleteSelectedObject();
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "pageup") {
+                this.resizeSelectedObject(scene, "width", 1);
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "pagedown") {
+                this.resizeSelectedObject(scene, "width", -1);
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "home") {
+                this.resizeSelectedObject(scene, "height", 1);
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "f7") {
+                this.resizeSelectedObject(scene, "height", -1);
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "f4") {
+                this.toggleSelectedEnemyStartDirection(scene);
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "f6") {
+                this.exportLevelCode();
+                keyboardInfo.event.preventDefault();
+                return;
+            }
+
+            if (key === "f9") {
+                this.exportLevelCodeSceneNiveau1Edit();
+                keyboardInfo.event.preventDefault();
+            }
+        });
+
+        this.updateLevelEditorHUD();
 
         return scene;
     }
@@ -161,7 +1136,7 @@ export class SceneNiveau1 {
             scene
         );
         const lyrina = new Sprite('lyrina', LManager)
-        lyrina.position = new Vector3(7, 0.2, 0);//debut(7, 0.2, 0)  part 1(-2.48, 0.47, 0) PART 2 (-12.11, 0.4, 0) part 3 (-20.923, 0.495, 0)
+        lyrina.position = new Vector3(-35.18, 0, 0);//debut(7, 0.2, 0)  part 1(-2.48, 0.47, 0) PART 2 (-12.11, 0.4, 0) part3 (-20.923, 0.495, 0) part 4 (-35.18, 0, 0)
         lyrina.size = 0.4;
         lyrina.playAnimation(0, 7, true, 100);
         
@@ -244,91 +1219,90 @@ export class SceneNiveau1 {
         let invincibilityFrames = 0;
         const collidables: Mesh[] = [];
 
-       
-        const slime1 = new Slime('slime1', scene, new Vector3(6, 0, -0.0099),this.devpoweractive);
-        const slime2 = new Slime('slime2', scene, new Vector3(3.8, 1, -0.0099),this.devpoweractive);
-        const slime3 = new Slime('slime3', scene, new Vector3(2.48, 1, -0.0099),this.devpoweractive);
-        const slime4 = new Slime('slime4', scene, new Vector3(-1.4, -0.1, -0.0099),this.devpoweractive);
-        const slime5 = new Slime('slime5', scene, new Vector3(-1.6, -0.1, -0.0099),this.devpoweractive);
-        const slimerouge1 = new Slimerouge('slimerouge1', scene, new Vector3(-6.69, 0.23, -0.0099),this.devpoweractive);
-        const slimerouge2 = new Slimerouge('slimerouge2', scene, new Vector3(-7.89, 0.50, -0.0099),this.devpoweractive);
-        const slimerouge3 = new Slimerouge('slimerouge3', scene, new Vector3(-9.39, 0.19, -0.0099),this.devpoweractive);
-        const slimerouge4 = new Slimerouge('slimerouge4', scene, new Vector3(-12.35, -0.06, -0.0099),this.devpoweractive);
-        const slimerouge5 = new Slimerouge('slimerouge5', scene, new Vector3(-13.95, -0.06, -0.0099),this.devpoweractive);
-        // on place la guêpe dans la zone visible près du joueur
-        const guepe1 = new Guepe('guepe1', scene, new Vector3(-4.06, 0.99, -0.0099),this.devpoweractive);
-        const guepe2 = new Guepe('guepe2', scene, new Vector3(-5.3, 1.88, -0.0099),this.devpoweractive);
-        const guepe3 = new Guepe('guepe3', scene, new Vector3(-5.3, 1.51, -0.0099),this.devpoweractive);
-        const guepe4 = new Guepe('guepe4', scene, new Vector3(-5.3, 1.15, -0.0099),this.devpoweractive);
-        const guepe5 = new Guepe('guepe5', scene, new Vector3(-13.5, 1, -0.0099),this.devpoweractive);//le deplaceur
-        //aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(axe: 0 verti, 1 horiz,distance,debut)
-        const guepepurple1 = new Guepepurple('guepepurple1', scene, new Vector3(-0.88, 0.98, -0.0099),this.devpoweractive,0,0.17,true);
-        const guepepurple2 = new Guepepurple('guepepurple2', scene, new Vector3(-0.45, 1.15, -0.0099),this.devpoweractive,1,0.17,false);
-        const guepepurple3 = new Guepepurple('guepepurple3', scene, new Vector3(-1.15, 0.98, -0.0099),this.devpoweractive,0,0.17,true);
-        const guepepurple4 = new Guepepurple('guepepurple4', scene, new Vector3(-1.6, 1.15, -0.0099),this.devpoweractive,1,0.17,true);
-        //frog create
-        const frog1 = new Frog('frog1', scene, new Vector3(-3.52, -0.11, -0.0099),this.devpoweractive);
-        const frog2 = new Frog('frog2', scene, new Vector3(-4.52, -0.11, -0.0099),this.devpoweractive);
-        //const frogpurple1 = new Frogpurple('frogpurple1', scene, new Vector3(-3.52, -50, -0.0099),this.devpoweractive);
-        //const frogpurple2 = new Frogpurple('frogpurple2', scene, new Vector3(8, 0, -0.0099),this.devpoweractive);
-        const slimerouge13 = new Slimerouge('slimerouge13', scene, new Vector3(-16.669, 0.049, -0.0099),this.devpoweractive);
-        const slimerouge15 = new Slimerouge('slimerouge15', scene, new Vector3(-16.922, 0.3, -0.0099),this.devpoweractive);
-        const slimerouge17 = new Slimerouge('slimerouge17', scene, new Vector3(-17.746, 0.3, -0.0099),this.devpoweractive);
-        const slimerouge19 = new Slimerouge('slimerouge19', scene, new Vector3(-18.785, 0.995, -0.0099),this.devpoweractive);
-        const slime11 = new Slime('slime11', scene, new Vector3(-18.182, 0.3,-0.0099),this.devpoweractive);
-        const slime10 = new Slime('slime10', scene, new Vector3(-18.47, 0.3, -0.0099),this.devpoweractive);
-        const slime9 = new Slime('slime9', scene, new Vector3(-18.782, 0.3, -0.0099),this.devpoweractive);
-        const slime8 = new Slime('slime8', scene, new Vector3(-18.614, 0.3, -0.0099),this.devpoweractive);
-        const slime7 = new Slime('slime7', scene, new Vector3(-18.318, 0.3, -0.0099),this.devpoweractive);
-        const slime6 = new Slime('slime6', scene, new Vector3(-19.92, 1.38, -0.0099),this.devpoweractive);
-        const guepe41 = new Guepe('guepe41', scene, new Vector3(-19.138, 0.861, -0.0099),this.devpoweractive);
-        const guepe43 = new Guepe('guepe43', scene, new Vector3(-19.391, 0.859, -0.0099),this.devpoweractive);
-        const slimerouge45 = new Slimerouge('slimerouge45', scene, new Vector3(-19.9, 0.3, -0.0099),this.devpoweractive);
-        const slimerouge47 = new Slimerouge('slimerouge47', scene, new Vector3(-19.752, 0.3, -0.0099),this.devpoweractive);
-        const slimerouge49 = new Slimerouge('slimerouge49', scene, new Vector3(-19.287, 0.3, -0.0099),this.devpoweractive);
-        const slime_38 = new Slime('slime_38', scene, new Vector3(-20.6, 0.2, -0.0099),this.devpoweractive);
-        const guepe_40 = new Guepe('guepe_40', scene, new Vector3(-21.393, 1.155, -0.0099),this.devpoweractive);
-        const guepe_42 = new Guepe('guepe_42', scene, new Vector3(-21.389, 0.69, -0.0099),this.devpoweractive);
-        const guepe_44 = new Guepe('guepe_44', scene, new Vector3(-21.391, 0.927, -0.0099),this.devpoweractive);
-        const guepe_edit41 = new Guepe('guepe_edit41', scene, new Vector3(-22.231, 0.408, -0.01),this.devpoweractive);
-        const guepe_edit43 = new Guepe('guepe_edit43', scene, new Vector3(-23.03, 0.672, -0.01),this.devpoweractive);
-        const guepe_edit45 = new Guepe('guepe_edit45', scene, new Vector3(-23.815, 0.947, -0.01),this.devpoweractive);
-        const guepepurple_edit51 = new Guepepurple('guepepurple_edit51', scene, new Vector3(-24.67, 0.919, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit53 = new Guepepurple('guepepurple_edit53', scene, new Vector3(-25.489, 1.782, -0.01),this.devpoweractive,1,0.4,true);
-        const guepepurple_edit57 = new Guepepurple('guepepurple_edit57', scene, new Vector3(-26.71, 1.572, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit61 = new Guepepurple('guepepurple_edit61', scene, new Vector3(-26.708, 1.352, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit63 = new Guepepurple('guepepurple_edit63', scene, new Vector3(-26.71, 1.786, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit49 = new Guepepurple('guepepurple_edit49', scene, new Vector3(-28.153, 2.39, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit54 = new Guepepurple('guepepurple_edit54', scene, new Vector3(-28.153, 1.797, -0.01),this.devpoweractive,0,0.17,false);
-        const guepe_edit49 = new Guepe('guepe_edit49', scene, new Vector3(-28.827, 1.922, -0.01),this.devpoweractive);
-        const guepe_edit51 = new Guepe('guepe_edit51', scene, new Vector3(-29.572, 2.131, -0.01),this.devpoweractive);
-        const guepepurple_edit52 = new Guepepurple('guepepurple_edit52', scene, new Vector3(-30.322, 2.133, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit55 = new Guepepurple('guepepurple_edit55', scene, new Vector3(-30.75, 2.135, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit58 = new Guepepurple('guepepurple_edit58', scene, new Vector3(-31.164, 2.129, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit56 = new Guepepurple('guepepurple_edit56', scene, new Vector3(-31.837, 2.033, -0.01),this.devpoweractive,0,0.17,true);
-        const guepepurple_edit62 = new Guepepurple('guepepurple_edit62', scene, new Vector3(-32.716, 1.159, -0.01),this.devpoweractive,0,0.17,false);
-        const guepepurple_edit64 = new Guepepurple('guepepurple_edit64', scene, new Vector3(-32.915, 1.159, -0.01),this.devpoweractive,0,0.17,false);
-        const guepepurple_edit66 = new Guepepurple('guepepurple_edit66', scene, new Vector3(-32.514, 1.165, -0.01),this.devpoweractive,0,0.17,false);
-        const frog_edit58 = new Frog('frog_edit58', scene, new Vector3(-35.65, 0.1, -0.0099),this.devpoweractive);
-        const frog_edit60 = new Frog('frog_edit60', scene, new Vector3(-36.065, 0.197, -0.0099),this.devpoweractive);
-        const frogpurple_edit62 = new Frogpurple('frogpurple_edit62', scene, new Vector3(-36.971, -0.106, -0.0099),this.devpoweractive);
-        const frogpurple_edit64 = new Frogpurple('frogpurple_edit64', scene, new Vector3(-37.164, -0.1, -0.0099),this.devpoweractive);
-        const frog_edit62 = new Frog('frog_edit62', scene, new Vector3(-38.054, 0.184, -0.0099),this.devpoweractive);
-        const frog_edit64 = new Frog('frog_edit64', scene, new Vector3(-39.543, 0.182, -0.0099),this.devpoweractive);
-        const frog_edit65 = new Frog('frog_edit65', scene, new Vector3(-40.913, 0.143, -0.0099),this.devpoweractive);
-        const frogpurple_edit67 = new Frogpurple('frogpurple_edit67', scene, new Vector3(-41.83, 0.604, -0.0099),this.devpoweractive);
-        const frogpurple_edit69 = new Frogpurple('frogpurple_edit69', scene, new Vector3(-42.537, 0.849, -0.0099),this.devpoweractive);
+        this.enemyObjects = [];
+        this.enemyObjectCounter = 1;
+        this.selectedEnemyObjectId = null;
+        this.runtimeSlimes = [];
+        this.runtimeGuepes = [];
+        this.runtimeFrogs = [];
+        this.runtimeFrogsPurple = [];
 
+        const slime1 = this.spawnEnemyObject(scene, "slime", "slime1", new Vector3(6, 0, -0.0099)).enemy as Slime;
+        const slime2 = this.spawnEnemyObject(scene, "slime", "slime2", new Vector3(3.8, 1, -0.0099)).enemy as Slime;
+        const slime3 = this.spawnEnemyObject(scene, "slime", "slime3", new Vector3(2.48, 1, -0.0099)).enemy as Slime;
+        const slime4 = this.spawnEnemyObject(scene, "slime", "slime4", new Vector3(-1.4, -0.1, -0.0099)).enemy as Slime;
+        const slime5 = this.spawnEnemyObject(scene, "slime", "slime5", new Vector3(-1.6, -0.1, -0.0099)).enemy as Slime;
+        const slimerouge1 = this.spawnEnemyObject(scene, "slimerouge", "slimerouge1", new Vector3(-6.69, 0.23, -0.0099)).enemy as Slimerouge;
+        const slimerouge2 = this.spawnEnemyObject(scene, "slimerouge", "slimerouge2", new Vector3(-7.89, 0.5, -0.0099)).enemy as Slimerouge;
+        const slimerouge3 = this.spawnEnemyObject(scene, "slimerouge", "slimerouge3", new Vector3(-9.39, 0.19, -0.0099)).enemy as Slimerouge;
+        const slimerouge4 = this.spawnEnemyObject(scene, "slimerouge", "slimerouge4", new Vector3(-12.35, -0.06, -0.0099)).enemy as Slimerouge;
+        const slimerouge5 = this.spawnEnemyObject(scene, "slimerouge", "slimerouge5", new Vector3(-13.95, -0.06, -0.0099)).enemy as Slimerouge;
+        const guepe1 = this.spawnEnemyObject(scene, "guepe", "guepe1", new Vector3(-4.06, 0.99, -0.0099)).enemy as Guepe;
+        const guepe2 = this.spawnEnemyObject(scene, "guepe", "guepe2", new Vector3(-5.3, 1.88, -0.0099)).enemy as Guepe;
+        const guepe3 = this.spawnEnemyObject(scene, "guepe", "guepe3", new Vector3(-5.3, 1.51, -0.0099)).enemy as Guepe;
+        const guepe4 = this.spawnEnemyObject(scene, "guepe", "guepe4", new Vector3(-5.3, 1.15, -0.0099)).enemy as Guepe;
+        const guepe5 = this.spawnEnemyObject(scene, "guepe", "guepe5", new Vector3(-13.5, 1, -0.0099)).enemy as Guepe;
+        const guepepurple1 = this.spawnEnemyObject(scene, "guepepurple", "guepepurple1", new Vector3(-0.88, 0.98, -0.0099), { axe: 0, distance: 0.17, debut: true }).enemy as Guepepurple;
+        const guepepurple2 = this.spawnEnemyObject(scene, "guepepurple", "guepepurple2", new Vector3(-0.45, 1.15, -0.0099), { axe: 1, distance: 0.17, debut: false }).enemy as Guepepurple;
+        const guepepurple3 = this.spawnEnemyObject(scene, "guepepurple", "guepepurple3", new Vector3(-1.15, 0.98, -0.0099), { axe: 0, distance: 0.17, debut: true }).enemy as Guepepurple;
+        const guepepurple4 = this.spawnEnemyObject(scene, "guepepurple", "guepepurple4", new Vector3(-1.6, 1.15, -0.0099), { axe: 1, distance: 0.17, debut: true }).enemy as Guepepurple;
+        const frog1 = this.spawnEnemyObject(scene, "frog", "frog1", new Vector3(-3.52, -0.11, -0.0099)).enemy as Frog;
+        const frog2 = this.spawnEnemyObject(scene, "frog", "frog2", new Vector3(-4.52, -0.11, -0.0099)).enemy as Frog;
+        const frogpurple1 = this.spawnEnemyObject(scene, "frogpurple", "frogpurple1", new Vector3(-3.52, -50, -0.0099)).enemy as Frogpurple;
+        this.spawnEnemyObject(scene, "slimerouge", "slimerouge_23", new Vector3(-16.089, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slimerouge", "slimerouge_25", new Vector3(-16.889, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slimerouge", "slimerouge_27", new Vector3(-17.677, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slime", "slime_29", new Vector3(-18.1, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slime", "slime_31", new Vector3(-18.276, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slime", "slime_33", new Vector3(-18.42, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slime", "slime_35", new Vector3(-18.56, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slime", "slime_37", new Vector3(-18.704, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "guepe", "guepe_39", new Vector3(-19.113, 0.818, -0.0099));
+        this.spawnEnemyObject(scene, "guepe", "guepe_41", new Vector3(-19.413, 0.816, -0.0099));
+        this.spawnEnemyObject(scene, "slimerouge", "slimerouge_45", new Vector3(-19.984, 0.3, -0.0099));
+        this.spawnEnemyObject(scene, "slimerouge", "slimerouge_34", new Vector3(-18.688, 1.005, -0.0099));
+        this.spawnEnemyObject(scene, "slime", "slime_38", new Vector3(-20.174, 1.541, -0.0099));
+        this.spawnEnemyObject(scene, "guepe", "guepe_40", new Vector3(-21.393, 1.255, -0.0099));
+        this.spawnEnemyObject(scene, "guepe", "guepe_42", new Vector3(-21.389, 0.683, -0.0099));
+        this.spawnEnemyObject(scene, "guepe", "guepe_44", new Vector3(-21.391, 0.961, -0.0099));
+        this.spawnEnemyObject(scene, "guepe", "guepe_edit41", new Vector3(-22.231, 0.408, -0.01));
+        this.spawnEnemyObject(scene, "guepe", "guepe_edit43", new Vector3(-23.03, 0.672, -0.01));
+        this.spawnEnemyObject(scene, "guepe", "guepe_edit45", new Vector3(-23.815, 0.947, -0.01));
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit51", new Vector3(-24.67, 0.919, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit53", new Vector3(-25.489, 1.782, -0.01), { axe: 1, distance: 0.4, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit57", new Vector3(-26.71, 1.572, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit61", new Vector3(-26.708, 1.352, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit63", new Vector3(-26.71, 1.786, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit49", new Vector3(-28.153, 2.39, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit54", new Vector3(-28.153, 1.797, -0.01), { axe: 0, distance: 0.17, debut: false });
+        this.spawnEnemyObject(scene, "guepe", "guepe_edit49", new Vector3(-28.827, 1.922, -0.01));
+        this.spawnEnemyObject(scene, "guepe", "guepe_edit51", new Vector3(-29.572, 2.131, -0.01));
+        //this.spawnEnemyObject(scene, "guepe", "guepe_edit53", new Vector3(-33.254, 0.614, -0.01));
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit52", new Vector3(-30.322, 2.133, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit55", new Vector3(-30.75, 2.135, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit58", new Vector3(-31.164, 2.129, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit56", new Vector3(-31.837, 2.033, -0.01), { axe: 0, distance: 0.17, debut: true });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit62", new Vector3(-32.716, 1.159, -0.01), { axe: 0, distance: 0.17, debut: false });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit64", new Vector3(-32.915, 1.159, -0.01), { axe: 0, distance: 0.17, debut: false });
+        this.spawnEnemyObject(scene, "guepepurple", "guepepurple_edit66", new Vector3(-32.514, 1.165, -0.01), { axe: 0, distance: 0.17, debut: false });
+        this.spawnEnemyObject(scene, "frog", "frog_edit58", new Vector3(-35.650, 0.1, -0.0099));
+        this.spawnEnemyObject(scene, "frog", "frog_edit60", new Vector3(-36.065, 0.197, -0.0099));
+        this.spawnEnemyObject(scene, "frogpurple", "frogpurple_edit62", new Vector3(-36.971, -0.106, -0.0099));
+        this.spawnEnemyObject(scene, "frogpurple", "frogpurple_edit64", new Vector3(-37.164, -0.1, -0.0099));
+        this.spawnEnemyObject(scene, "frog", "frog_edit62", new Vector3(-38.054, 0.184, -0.0099));
+        this.spawnEnemyObject(scene, "frog", "frog_edit64", new Vector3(-39.543, 0.182, -0.0099));
+        this.spawnEnemyObject(scene, "frog", "frog_edit65", new Vector3(-40.913, 0.143, -0.0099));
+        this.spawnEnemyObject(scene, "frogpurple", "frogpurple_edit67", new Vector3(-41.83, 0.604, -0.0099));
+        this.spawnEnemyObject(scene, "frogpurple", "frogpurple_edit69", new Vector3(-42.537, 0.849, -0.0099));
+        const slimes = this.runtimeSlimes;
+        const guepes = this.runtimeGuepes;
 
-        const slimes = [slime1, slime2, slime3, slime4, slime5, slimerouge1, slimerouge2, slimerouge3, slimerouge4, slimerouge5, frog1, frog2, frog_edit58, frog_edit60, frog_edit62, frog_edit64, frog_edit65,  frogpurple_edit62, frogpurple_edit64, frogpurple_edit67, frogpurple_edit69, slimerouge13, slimerouge15, slimerouge17, slimerouge19, slime11, slime10, slime9, slime8, slime7, slime6, slime_38, slimerouge45, slimerouge47, slimerouge49];
-        const guepes = [guepe1, guepe2, guepe3, guepe4,guepe41,guepe43, guepe5, guepepurple1, guepepurple2, guepepurple3, guepepurple4, guepe_40, guepe_42, guepe_44, guepe_edit41, guepe_edit43, guepe_edit45, guepepurple_edit51, guepepurple_edit53, guepepurple_edit57, guepepurple_edit61, guepepurple_edit63, guepepurple_edit49, guepepurple_edit54, guepe_edit49, guepe_edit51, guepepurple_edit52, guepepurple_edit55, guepepurple_edit58, guepepurple_edit56, guepepurple_edit62, guepepurple_edit64, guepepurple_edit66];
-        const frogs = [frog1, frog2, frog_edit58, frog_edit60, frog_edit62, frog_edit64, frog_edit65];
-        const frogspurple = [ frogpurple_edit62, frogpurple_edit64, frogpurple_edit67, frogpurple_edit69];
-        let lastHitSlime: Slime | null | Slimerouge | Guepe = null;
+        let lastHitSlime: Slime | Slimerouge | Guepe | Guepepurple | Frog | Frogpurple | null = null;
         
         // Compteur global pour déclencher le saut des frogs
         // après un saut du joueur.
-        
+        const frogs = this.runtimeFrogs;
+        const frogspurple = this.runtimeFrogsPurple;
 
         // Détecte s'il y a du sol "devant" un collider de slime, dans une direction donnée
         const hasGroundAhead = (slimeCollider: Mesh, dir: number): boolean => {
@@ -1467,63 +2441,63 @@ export class SceneNiveau1 {
                 lyrina.isVisible = true;
             }
 
-            for (const slime of slimes) {
-                if((invincibilityFrames <= 0 && playerCollider.intersectsMesh(slime.attackCollider, false) && slime.attackCollider.checkCollisions)||(invincibilityFrames <= 0 && playerCollider.intersectsMesh(slime.attackCollider, false) && !slime.IsGrounded)) {
-                    lyrina.playAnimation(24, 24, false, 500, () => {  
-                        lyrina.playAnimation(0, 5, true, 100);
-                        isAttacking = false;
-                        isKnockback = false;
-                        knockbackVelocityX = 0;
-                    })
-                    this.health -= slime.degat;
-                    {
-                        const dx = playerCollider.position.x - slime.slimeCollider.position.x;
-                        // lance un knockback continu plutôt qu'un téléport
-                        isKnockback = true;
-                        knockbackVelocityX = (dx >= 0) ? 0.04 : -0.04;
-                        // 120 frames d'invincibilité après avoir été touché
-                        invincibilityFrames = 120;
-                        lastHitSlime = slime;
+            if (!this.enemiesPaused) {
+                for (const slime of slimes) {
+                    if((invincibilityFrames <= 0 && playerCollider.intersectsMesh(slime.attackCollider, false) && slime.attackCollider.checkCollisions)||(invincibilityFrames <= 0 && playerCollider.intersectsMesh(slime.attackCollider, false) && !slime.IsGrounded)) {
+                        lyrina.playAnimation(24, 24, false, 500, () => {  
+                            lyrina.playAnimation(0, 5, true, 100);
+                            isAttacking = false;
+                            isKnockback = false;
+                            knockbackVelocityX = 0;
+                        })
+                        this.health -= slime.degat;
+                        {
+                            const dx = playerCollider.position.x - slime.slimeCollider.position.x;
+                            // lance un knockback continu plutôt qu'un téléport
+                            isKnockback = true;
+                            knockbackVelocityX = (dx >= 0) ? 0.04 : -0.04;
+                            // 120 frames d'invincibilité après avoir été touché
+                            invincibilityFrames = 120;
+                            lastHitSlime = slime;
+                        }
                     }
                 }
-            }
-            for (const guepe of guepes) {
-                if(invincibilityFrames <= 0 && playerCollider.intersectsMesh(guepe.attackCollider, false) && guepe.attackCollider.checkCollisions) {
-                    lyrina.playAnimation(24, 24, false, 500, () => {  
-                        lyrina.playAnimation(0, 5, true, 100);
-                        isAttacking = false;
-                        isKnockback = false;
-                        knockbackVelocityX = 0;
-                    })
-                    this.health -= guepe.degat;
-                    {
-                        const dx = playerCollider.position.x - guepe.slimeCollider.position.x;
-                        // lance un knockback continu plutôt qu'un téléport
-                        isKnockback = true;
-                        knockbackVelocityX = (dx >= 0) ? 0.04 : -0.04;
-                        // 120 frames d'invincibilité après avoir été touché
-                        invincibilityFrames = 120;
-                        lastHitSlime = guepe;
+                for (const guepe of guepes) {
+                    if(invincibilityFrames <= 0 && playerCollider.intersectsMesh(guepe.attackCollider, false) && guepe.attackCollider.checkCollisions) {
+                        lyrina.playAnimation(24, 24, false, 500, () => {  
+                            lyrina.playAnimation(0, 5, true, 100);
+                            isAttacking = false;
+                            isKnockback = false;
+                            knockbackVelocityX = 0;
+                        })
+                        this.health -= guepe.degat;
+                        {
+                            const dx = playerCollider.position.x - guepe.slimeCollider.position.x;
+                            // lance un knockback continu plutôt qu'un téléport
+                            isKnockback = true;
+                            knockbackVelocityX = (dx >= 0) ? 0.04 : -0.04;
+                            // 120 frames d'invincibilité après avoir été touché
+                            invincibilityFrames = 120;
+                            lastHitSlime = guepe;
+                        }
                     }
                 }
             }
             //ACTIVATION DES COLLISION ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-            // Populate collidables once (utilisé aussi pendant le knockback)
-            if (collidables.length === 0) {
-                for (const m of scene.meshes) {
-                    if (!(m instanceof Mesh)) {
-                        continue;
-                    }
+            // Rebuild collidables pour inclure immédiatement les ajouts/suppressions de l'éditeur.
+            collidables.length = 0;
+            for (const m of scene.meshes) {
+                if (!(m instanceof Mesh)) {
+                    continue;
+                }
 
-                    // Ajoute automatiquement tous les colliders de décor.
-                    const isLevelCollider =
-                        m.name.startsWith('block') ||
-                        m.name.startsWith('platform') ||
-                        m.name.startsWith('obstacle');
+                const isLevelCollider =
+                    m.name.startsWith('block') ||
+                    m.name.startsWith('platform') ||
+                    m.name.startsWith('obstacle');
 
-                    if (isLevelCollider) {
-                        collidables.push(m);
-                    }
+                if (isLevelCollider) {
+                    collidables.push(m);
                 }
             }
 
@@ -1689,7 +2663,7 @@ export class SceneNiveau1 {
                         }
                         {
                             const pBB = playerCollider.getBoundingInfo().boundingBox;
-                            const eps = 0.001;
+                            const eps = 0.0005;
                             for (const slime of slimes) {
                                 const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
                                 const overlapX = pBB.maximumWorld.x > sBB.minimumWorld.x + eps && pBB.minimumWorld.x < sBB.maximumWorld.x - eps;
@@ -1740,7 +2714,7 @@ export class SceneNiveau1 {
                         }
                         {
                             const pBB = playerCollider.getBoundingInfo().boundingBox;
-                            const eps = 0.001;
+                            const eps = 0.0005;
                             for (const slime of slimes) {
                                 const sBB = slime.slimeCollider.getBoundingInfo().boundingBox;
                                 const overlapX = pBB.maximumWorld.x > sBB.minimumWorld.x + eps && pBB.minimumWorld.x < sBB.maximumWorld.x - eps;
@@ -1948,6 +2922,10 @@ export class SceneNiveau1 {
         });
         //GESTION MONSTRES
         scene.onBeforeRenderObservable.add(() => {
+            if (this.enemiesPaused) {
+                return;
+            }
+
             for (const slime of slimes) {
                 if (slime instanceof Slime) {
                     slimeboucle(slime);
@@ -1971,91 +2949,175 @@ export class SceneNiveau1 {
     }
 
     async CreateEnvironment(scene:Scene): Promise<void> {
+        this.levelObjects = [];
+        this.levelObjectCounter = 1;
+        this.setSelectedLevelObject(null);
+        this.selectedEnemyObjectId = null;
 
-        const obstacleinvisible = new Obstaclesinvisibles("obstacleinvisible", this.scene, new Vector3(7.75, 0.51, 0), 3, 10,this.devpoweractive);
+        this.spawnLevelObject(scene, "obstacleInvisible", "obstacleinvisible", new Vector3(7.75, 0.51, 0), {
+            widthincubes: 3,
+            heightincubes: 10
+        });
 
-        const ground1 = new Ground("block1", this.scene, new Vector3(3, -0.28, 0), 120,this.devpoweractive);
-        const ground2 = new Ground("block2", this.scene, new Vector3(-16.2, -0.28, 0), 68,this.devpoweractive);
-        //const ground3 = new Ground("block3", this.scene, new Vector3(-22, -0.18, 0), 68,this.devpoweractive);
-        //const ground4 = new Ground("block4", this.scene, new Vector3(7, -0.18, 0), 30,this.devpoweractive);
+        this.spawnLevelObject(scene, "ground", "block1", new Vector3(3, -0.28, 0), {
+            sizeintitles: 120
+        });
+        this.spawnLevelObject(scene, "ground", "block2", new Vector3(-16.2, -0.28, 0), {
+            sizeintitles: 68
+        });
 
-        const obstacle2 = new Obstacles("obstacle2", this.scene, new Vector3(4, -0.1, -0.0101), 7, 2,this.devpoweractive);
-        const obstacle3 = new Obstacles("obstacle3", this.scene, new Vector3(3.242, 0.05, -0.0101), 6, 4,this.devpoweractive);
-        const obstacle4 = new Obstacles("obstacle4", this.scene, new Vector3(2.48, -0.1, -0.0101), 7, 2,this.devpoweractive);
-        const obstacle5 = new Obstacles("obstacle5", this.scene, new Vector3(-0.13, -0.16, -0.0101), 3, 1,this.devpoweractive);
-        const obstacle6 = new Obstacles("obstacle6", this.scene, new Vector3(-1.91, -0.16, -0.0101), 3, 1,this.devpoweractive);
-        const obstacle7 = new Obstacles("obstacle7", this.scene, new Vector3(-12.1, -0.1, -0.0101), 4, 3,this.devpoweractive);
-        const obstacle8 = new Obstacles("obstacle8", this.scene, new Vector3(-14.2, -0.1, -0.0101), 4, 3,this.devpoweractive);
-        //aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(largeur,hauteur)
-        const obstaclevolant = new Obstaclesflying("obstaclevolant1", this.scene, new Vector3(-1.02, 0.46, -0.0101), 15, 3,this.devpoweractive);
-        const obstaclevolant2 = new Obstaclesflying("obstaclevolant2", this.scene, new Vector3(-50, 0.37, -0.0101), 15, 3,this.devpoweractive);
-        const obstaclevolant4 = new Obstaclesflying("obstaclevolant4", this.scene, new Vector3(-4.06, 0.74, -0.0101), 10, 1,this.devpoweractive);
-        const obstaclevolant5 = new Obstaclesflying("obstaclevolant5", this.scene, new Vector3(-6.58, 0.05, -0.0101), 7, 1,this.devpoweractive);
-        const obstaclevolant6 = new Obstaclesflying("obstaclevolant6", this.scene, new Vector3(-8, 0.35, -0.0101), 7, 1,this.devpoweractive);
-        const obstaclevolant7 = new Obstaclesflying("obstaclevolant7", this.scene, new Vector3(-9.5, 0, -0.0101), 7, 1,this.devpoweractive);
+        this.spawnLevelObject(scene, "obstacle", "obstacle2", new Vector3(4, -0.1, -0.0101), {
+            widthincubes: 7,
+            heightincubes: 2
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle3", new Vector3(3.242, 0.05, -0.0101), {
+            widthincubes: 6,
+            heightincubes: 4
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle4", new Vector3(2.48, -0.1, -0.0101), {
+            widthincubes: 7,
+            heightincubes: 2
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle5", new Vector3(-0.13, -0.16, -0.0101), {
+            widthincubes: 3,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle6", new Vector3(-1.91, -0.16, -0.0101), {
+            widthincubes: 3,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle7", new Vector3(-12.1, -0.1, -0.0101), {
+            widthincubes: 4,
+            heightincubes: 3
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle8", new Vector3(-14.2, -0.1, -0.0101), {
+            widthincubes: 4,
+            heightincubes: 3
+        });
 
-        const platform1 = new Platforme("platform1", this.scene, new Vector3(0.76, 0.39, 0),this.devpoweractive);
-        const platform2 = new Platforme("platform2", this.scene, new Vector3(-2.5, 0.3, 0),this.devpoweractive);
-        const platform3 = new Platforme("platform3", this.scene, new Vector3(-4.6, 1.3, 0),this.devpoweractive);
-        const platform4 = new Platforme("platform4", this.scene, new Vector3(-10.5, 0.5, 0),this.devpoweractive);
-        const platform5 = new Platforme("platform5", this.scene, new Vector3(-10.5, -0.18, 0),this.devpoweractive);
-        const platform6 = new Platforme("platform6", this.scene, new Vector3(-12.85, 0.33, 0),this.devpoweractive);
-        const platform7 = new Platforme("platform7", this.scene, new Vector3(-13.45, 0.33, 0),this.devpoweractive);
-        const platform_edit30 = new Platforme("platform_edit30", this.scene, new Vector3(-20.984, 0.65, 0),this.devpoweractive);
-        const platform_edit32 = new Platforme("platform_edit32", this.scene, new Vector3(-20.825, 1, 0),this.devpoweractive);
-        const platform_edit34 = new Platforme("platform_edit34", this.scene, new Vector3(-20.825, 0.3, 0),this.devpoweractive);
-
-        const obstacle_edit34 = new Obstacles("obstacle_edit34", this.scene, new Vector3(-18.63, 0.822, -0.0101), 5, 1,this.devpoweractive);
-        const obstacle_edit24 = new Obstacles("obstacle_edit24", this.scene, new Vector3(-17.702, -0.034, -0.0101), 6, 4,this.devpoweractive);
-        const obstacle_edit26 = new Obstacles("obstacle_edit26", this.scene, new Vector3(-18.46, -0.11, -0.0101), 7, 3,this.devpoweractive);
-        const obstacle_edit28 = new Obstacles("obstacle_edit28", this.scene, new Vector3(-17.088, -0.112, -0.0101), 5, 3,this.devpoweractive);
-        const obstacle_edit30 = new Obstacles("obstacle_edit30", this.scene, new Vector3(-16.258, -0.188, -0.0101), 9, 2,this.devpoweractive);
-        const obstacle_edit22 = new Obstacles("obstacle_edit22", this.scene, new Vector3(-19.293, -0.037, -0.0101), 7, 4,this.devpoweractive);
-        const obstacle_edit29 = new Obstacles("obstacle_edit29", this.scene, new Vector3(-20.051, -0.186, -0.0101), 6, 2,this.devpoweractive);
-        const obstaclevolant_edit33 = new Obstaclesflying("obstaclevolant_edit33", this.scene, new Vector3(-19.965, 1.124, -0.0101), 6, 2,this.devpoweractive);
-        const obstaclevolant_edit39 = new Obstaclesflying("obstaclevolant_edit39", this.scene, new Vector3(-18.555, 0.676, -0.0101), 6, 1,this.devpoweractive);
-        const platform_edit36 = new Platforme("platform_edit36", this.scene, new Vector3(-21.848, 0.068, 0),this.devpoweractive);
-        const platform_edit38 = new Platforme("platform_edit38", this.scene, new Vector3(-22.696, 0.362, 0),this.devpoweractive);
-        const platform_edit40 = new Platforme("platform_edit40", this.scene, new Vector3(-23.488, 0.665, 0),this.devpoweractive);
-        const platform_edit42 = new Platforme("platform_edit42", this.scene, new Vector3(-24.21, 0.936, 0),this.devpoweractive);
-        const obstaclevolant_edit44 = new Obstaclesflying("obstaclevolant_edit44", this.scene, new Vector3(-25.479, 1.141, -0.0101), 8, 1,this.devpoweractive);
-        const platform_edit46 = new Platforme("platform_edit46", this.scene, new Vector3(-26.296, 1.648, 0),this.devpoweractive);
-        const platform_edit48 = new Platforme("platform_edit48", this.scene, new Vector3(-27.071, 1.185, 0),this.devpoweractive);
-        const platform_edit50 = new Platforme("platform_edit50", this.scene, new Vector3(-27.548, 1.493, 0),this.devpoweractive);
-        const platform_edit52 = new Platforme("platform_edit52", this.scene, new Vector3(-28.548, 1.514, 0),this.devpoweractive);
-        const platform_edit54 = new Platforme("platform_edit54", this.scene, new Vector3(-29.177, 1.885, 0),this.devpoweractive);
-        const platform_edit56 = new Platforme("platform_edit56", this.scene, new Vector3(-30.003, 2.177, 0),this.devpoweractive);
-        const block_edit58 = new Ground("block_edit58", this.scene, new Vector3(-22.813, -0.28, 0), 9,this.devpoweractive);
-        const block_edit60 = new Ground("block_edit60", this.scene, new Vector3(-24.597, -0.28, 0), 9,this.devpoweractive);
-        const block_edit62 = new Ground("block_edit62", this.scene, new Vector3(-26.442, -0.28, 0), 9,this.devpoweractive);
-        const block_edit50 = new Ground("block_edit50", this.scene, new Vector3(-28.222, -0.28, 0), 9,this.devpoweractive);
-        const block_edit52 = new Ground("block_edit52", this.scene, new Vector3(-29.944, -0.28, 0), 9,this.devpoweractive);
-        const block_edit54 = new Ground("block_edit54", this.scene, new Vector3(-32.122, -0.28, 0), 12,this.devpoweractive);
-        const obstacle_edit57 = new Obstacles("obstacle_edit57", this.scene, new Vector3(-22.459, -0.122, -0.0101), 4, 2,this.devpoweractive);
-        const platform_edit61 = new Platforme("platform_edit61", this.scene, new Vector3(-31.478, 2.173, 0),this.devpoweractive);
-        const platform_edit63 = new Platforme("platform_edit63", this.scene, new Vector3(-30.59, 1.708, 0),this.devpoweractive);
-        const platform_edit65 = new Platforme("platform_edit65", this.scene, new Vector3(-30.923, 1.708, 0),this.devpoweractive);
-        const obstacle_edit69 = new Obstacles("obstacle_edit69", this.scene, new Vector3(-32.487, 0.114, -0.0101), 7, 5,this.devpoweractive);
-        const platform_edit58 = new Platforme("platform_edit58", this.scene, new Vector3(-32.185, 2.173, 0),this.devpoweractive);
-        const platform_edit62 = new Platforme("platform_edit62", this.scene, new Vector3(-33.118, 0.37, 0),this.devpoweractive);
-        const platform_edit64 = new Platforme("platform_edit64", this.scene, new Vector3(-33.48, 0.258, 0),this.devpoweractive);
-        const platform_edit66 = new Platforme("platform_edit66", this.scene, new Vector3(-33.839, 0.132, 0),this.devpoweractive);
-        const platform_edit68 = new Platforme("platform_edit68", this.scene, new Vector3(-34.175, -0.012, 0),this.devpoweractive);
-        const platform_edit70 = new Platforme("platform_edit70", this.scene, new Vector3(-34.512, -0.137, 0),this.devpoweractive);
-        const block_edit72 = new Ground("block_edit72", this.scene, new Vector3(-36.861, -0.28, 0), 32,this.devpoweractive);
-        const obstacle_edit65 = new Obstacles("obstacle_edit65", this.scene, new Vector3(-36.074, -0.085, -0.0101), 6, 2,this.devpoweractive);
-        const platform_edit67 = new Platforme("platform_edit67", this.scene, new Vector3(-36.695, 0.343, 0),this.devpoweractive);
-        const platform_edit69 = new Platforme("platform_edit69", this.scene, new Vector3(-37.439, 0.337, 0),this.devpoweractive);
-        const obstacle_edit71 = new Obstacles("obstacle_edit71", this.scene, new Vector3(-38.048, -0.085, -0.0101), 6, 2,this.devpoweractive);
-        const obstaclevolant_edit73 = new Obstaclesflying("obstaclevolant_edit73", this.scene, new Vector3(-39.92, -0.08, -0.0101), 7, 1,this.devpoweractive);
-        const obstaclevolant_edit70 = new Obstaclesflying("obstaclevolant_edit70", this.scene, new Vector3(-41.238, -0.073, -0.0101), 7, 1,this.devpoweractive);
-        const platform_edit72 = new Platforme("platform_edit72", this.scene, new Vector3(-41.828, 0.428, 0),this.devpoweractive);
-        const platform_edit74 = new Platforme("platform_edit74", this.scene, new Vector3(-42.176, 0.225, 0),this.devpoweractive);
-        const platform_edit76 = new Platforme("platform_edit76", this.scene, new Vector3(-42.54, 0.653, 0),this.devpoweractive);
-        const platform_edit78 = new Platforme("platform_edit78", this.scene, new Vector3(-42.914, 0.434, 0),this.devpoweractive);
-        const platform_edit80 = new Platforme("platform_edit80", this.scene, new Vector3(-43.385, 0.219, 0),this.devpoweractive);
-        const block_edit82 = new Ground("block_edit82", this.scene, new Vector3(-45.203, -0.28, 0), 28,this.devpoweractive);
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant1", new Vector3(-1.02, 0.46, -0.0101), {
+            widthincubes: 15,
+            heightincubes: 3
+        });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant2", new Vector3(-50, 0.37, -0.0101), {
+            widthincubes: 15,
+            heightincubes: 3
+        });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant4", new Vector3(-4.06, 0.74, -0.0101), {
+            widthincubes: 10,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant5", new Vector3(-6.58, 0.05, -0.0101), {
+            widthincubes: 7,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant6", new Vector3(-8, 0.35, -0.0101), {
+            widthincubes: 7,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant7", new Vector3(-9.5, 0, -0.0101), {
+            widthincubes: 7,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit24", new Vector3(-17.702, -0.034, -0.0101), {
+            widthincubes: 6,
+            heightincubes: 4
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit26", new Vector3(-18.46, -0.11, -0.0101), {
+            widthincubes: 7,
+            heightincubes: 3
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit28", new Vector3(-17.088, -0.112, -0.0101), {
+            widthincubes: 5,
+            heightincubes: 3
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit30", new Vector3(-16.258, -0.188, -0.0101), {
+            widthincubes: 9,
+            heightincubes: 2
+        });
         
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit22", new Vector3(-19.293, -0.037, -0.0101), {
+            widthincubes: 7,
+            heightincubes: 4
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit29",  new Vector3(-20.051, -0.186, -0.0101), {
+            widthincubes: 6,
+            heightincubes: 2
+        });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit34",  new Vector3(-18.63, 0.822, -0.0101), {
+            widthincubes: 5,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant_edit33", new Vector3(-19.965, 1.124, -0.0101), {
+            widthincubes: 6,
+            heightincubes: 2
+        });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant_edit39",  new Vector3(-18.555, 0.676, -0.0101), {
+            widthincubes: 6,
+            heightincubes: 1
+        });
+        this.spawnLevelObject(scene, "platform", "platform1", new Vector3(0.76, 0.39, 0));
+        this.spawnLevelObject(scene, "platform", "platform2", new Vector3(-2.5, 0.3, 0));
+        this.spawnLevelObject(scene, "platform", "platform3", new Vector3(-4.6, 1.3, 0));
+        this.spawnLevelObject(scene, "platform", "platform4", new Vector3(-10.5, 0.5, 0));
+        this.spawnLevelObject(scene, "platform", "platform5", new Vector3(-10.5, -0.18, 0));
+        this.spawnLevelObject(scene, "platform", "platform6", new Vector3(-12.85, 0.33, 0));
+        this.spawnLevelObject(scene, "platform", "platform7", new Vector3(-13.45, 0.33, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit30", new Vector3(-20.984, 0.65, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit32", new Vector3(-20.825, 1, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit34", new Vector3(-20.825, 0.3, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit36", new Vector3(-21.848, 0.068, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit38", new Vector3(-22.696, 0.362, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit40", new Vector3(-23.488, 0.665, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit42", new Vector3(-24.21, 0.936, 0));
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant_edit44", new Vector3(-25.479, 1.141, -0.0101), { widthincubes: 8, heightincubes: 1 });
+        this.spawnLevelObject(scene, "platform", "platform_edit46", new Vector3(-26.296, 1.648, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit48", new Vector3(-27.071, 1.185, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit50", new Vector3(-27.548, 1.493, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit52", new Vector3(-28.548, 1.514, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit54", new Vector3(-29.177, 1.885, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit56", new Vector3(-30.003, 2.177, 0));
+        this.spawnLevelObject(scene, "ground", "block_edit58", new Vector3(-22.813, -0.28, 0), { sizeintitles: 9 });
+        this.spawnLevelObject(scene, "ground", "block_edit60", new Vector3(-24.597, -0.28, 0), { sizeintitles: 9 });
+        this.spawnLevelObject(scene, "ground", "block_edit62", new Vector3(-26.442, -0.28, 0), { sizeintitles: 9 });
+        this.spawnLevelObject(scene, "ground", "block_edit50", new Vector3(-28.222, -0.28, 0), { sizeintitles: 9 });
+        this.spawnLevelObject(scene, "ground", "block_edit52", new Vector3(-29.944, -0.28, 0), { sizeintitles: 9 });
+        this.spawnLevelObject(scene, "ground", "block_edit54", new Vector3(-32.122, -0.28, 0), { sizeintitles: 12 });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit57", new Vector3(-22.459, -0.122, -0.0101), { widthincubes: 4, heightincubes: 2 });
+        this.spawnLevelObject(scene, "platform", "platform_edit61", new Vector3(-31.478, 2.173, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit63", new Vector3(-30.59, 1.708, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit65", new Vector3(-30.923, 1.708, 0));
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit69", new Vector3(-32.487, 0.114, -0.0101), { widthincubes: 7, heightincubes: 5 });
+        this.spawnLevelObject(scene, "platform", "platform_edit58", new Vector3(-32.185, 2.173, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit62", new Vector3(-33.118, 0.37, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit64", new Vector3(-33.48, 0.258, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit66", new Vector3(-33.839, 0.132, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit68", new Vector3(-34.175, -0.012, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit70", new Vector3(-34.512, -0.137, 0));
+        this.spawnLevelObject(scene, "ground", "block_edit72", new Vector3(-36.861, -0.28, 0), { sizeintitles: 32 });
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit65", new Vector3(-36.074, -0.085, -0.0101), { widthincubes: 6, heightincubes: 2 });
+        this.spawnLevelObject(scene, "platform", "platform_edit67", new Vector3(-36.695, 0.343, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit69", new Vector3(-37.439, 0.337, 0));
+        this.spawnLevelObject(scene, "obstacle", "obstacle_edit71", new Vector3(-38.048, -0.085, -0.0101), { widthincubes: 6, heightincubes: 2 });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant_edit73", new Vector3(-39.92, -0.08, -0.0101), { widthincubes: 7, heightincubes: 1 });
+        this.spawnLevelObject(scene, "obstacleFlying", "obstaclevolant_edit70", new Vector3(-41.238, -0.073, -0.0101), { widthincubes: 7, heightincubes: 1 });
+        this.spawnLevelObject(scene, "platform", "platform_edit72", new Vector3(-41.828, 0.428, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit74", new Vector3(-42.176, 0.225, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit76", new Vector3(-42.54, 0.653, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit78", new Vector3(-42.914, 0.434, 0));
+        this.spawnLevelObject(scene, "platform", "platform_edit80", new Vector3(-43.385, 0.219, 0));
+        this.spawnLevelObject(scene, "ground", "block_edit82", new Vector3(-45.203, -0.28, 0), { sizeintitles: 28 });
+
+
+const slimes = this.runtimeSlimes;
+const guepes = this.runtimeGuepes;
+const frogs = this.runtimeFrogs;
+const frogspurple = this.runtimeFrogsPurple;
+        if (this.levelObjects.length > 0) {
+            this.setSelectedLevelObject(this.levelObjects[0].id);
+        }
+        this.updateLevelEditorHUD();
+
         const skybox = Mesh.CreateBox("BackgroundSkybox", 500, scene, undefined, Mesh.BACKSIDE);
     
         
@@ -2167,5 +3229,22 @@ export class SceneNiveau1 {
                 part = 0;
             }
         })
+
+        const editorHUD = new GUI.TextBlock("levelEditorHUD");
+        editorHUD.textHorizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        editorHUD.textVerticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        editorHUD.paddingTop = "2%";
+        editorHUD.paddingRight = "2%";
+        editorHUD.width = "46%";
+        editorHUD.height = "32%";
+        editorHUD.color = "#e8f6ff";
+        editorHUD.fontFamily = "monospace";
+        editorHUD.fontSize = 18;
+        editorHUD.textWrapping = true;
+        editorHUD.outlineColor = "black";
+        editorHUD.outlineWidth = 2;
+        advancedTexture.addControl(editorHUD);
+        this.levelEditorHUD = editorHUD;
+        this.updateLevelEditorHUD();
     }
 }

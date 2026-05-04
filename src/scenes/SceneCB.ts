@@ -224,12 +224,12 @@ export class SceneCB {
         const collidables: Mesh[] = [];
 
         
-        const slime1 = new Slime('slime1', scene, new Vector3(0.5, 0, 0));
-        const slime2 = new Slime('slime2', scene, new Vector3(-1, 2, 0));
-        const slime3 = new Slime('slime3', scene, new Vector3(2, 2, 0));
-        const slime4 = new Slime('slime4', scene, new Vector3(2, 5, 0));
-        const slimerouge1 = new Slimerouge('slimerouge1', scene, new Vector3(-15, 0, 0));
-        const slimerouge2 = new Slimerouge('slimerouge2', scene, new Vector3(-14, 0, 0));
+        const slime1 = new Slime('slime1', scene, new Vector3(0.5, 0, 0),this.devpoweractive);
+        const slime2 = new Slime('slime2', scene, new Vector3(-1, 2, 0),this.devpoweractive);
+        const slime3 = new Slime('slime3', scene, new Vector3(2, 2, 0),this.devpoweractive);
+        const slime4 = new Slime('slime4', scene, new Vector3(2, 5, 0),this.devpoweractive);
+        const slimerouge1 = new Slimerouge('slimerouge1', scene, new Vector3(-15, 0, 0),this.devpoweractive);
+        const slimerouge2 = new Slimerouge('slimerouge2', scene, new Vector3(-14, 0, 0),this.devpoweractive);
         // on place la guêpe dans la zone visible près du joueur
         const guepe1 = new Guepe('guepe1', scene, new Vector3(-1.5, 0.01, 0),this.devpoweractive);
         const guepepurple1 = new Guepepurple('guepepurple1', scene, new Vector3(-1.5, 0.6, 0),this.devpoweractive,0,0.2,true);

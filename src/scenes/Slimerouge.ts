@@ -21,7 +21,7 @@ export class Slimerouge {
     public degat:number;
     public isDead: boolean;
 
-    constructor(id: string, scene: Scene, initialPosition: Vector3) {
+    constructor(id: string, scene: Scene, initialPosition: Vector3, visible:boolean) {
         const SlimeManager = new SpriteManager(
             'SlimeManager',
             './sprites/spritesheetslimerouge_r.png',
@@ -40,7 +40,7 @@ export class Slimerouge {
         const scolliderWidth = slime.size * 0.4;   // narrower than sprite width
         const scolliderHeight = slime.size /3;   // close to sprite height
         const scolliderDepth = 0.1;                  // thin depth for 2D side view
-        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth-0.015, height: scolliderHeight, depth: scolliderDepth}, scene);
+        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth, height: scolliderHeight, depth: scolliderDepth}, scene);
         slimeCollider.isVisible = false;
         slimeCollider.material = new StandardMaterial('slimeMaterial', scene);
         slimeCollider.checkCollisions = true;
@@ -57,8 +57,8 @@ export class Slimerouge {
         const speed = 0.005;
         const isAttacking = false;
         const pastFirstCycle = false;
-        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderHeight+0.01, height: scolliderWidth-0.01, depth: scolliderDepth}, scene);
-        sattackCollider.isVisible = true;
+        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderWidth+0.01, height: scolliderHeight+0.01, depth: scolliderDepth}, scene);
+        sattackCollider.isVisible = visible;
         sattackCollider.material = new StandardMaterial('playerMaterial', scene);
         sattackCollider.material.wireframe = true;
         sattackCollider.checkCollisions = false;
