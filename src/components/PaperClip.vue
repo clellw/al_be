@@ -6,13 +6,13 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import { SceneCB } from '@/scenes/SceneCB';
+import { CH1_CU_OW_1 } from '@/scenes/chapterone/CH1_CU_OW_1';
 
 export default defineComponent({
   name: 'PaperClip',
   mounted(){
     const canvas = document.querySelector("canvas")!;
-    new SceneCB(canvas);
+    new CH1_CU_OW_1(canvas);
   }
 });
 </script>
@@ -23,6 +23,7 @@ export default defineComponent({
 canvas {
   width: 100%;
   height: 100%;
+  image-rendering: pixelated;
 }
 
 </style>
