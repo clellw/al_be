@@ -1067,7 +1067,6 @@ export class SceneCB {
         function slimerougeboucle(slime: Slimerouge): void {
             // Si le slime rouge est déjà mort, on ne fait plus rien
             if (slime.isDead) {
-                slimes.splice(slimes.indexOf(slime), 1);
                 return;
             }
             if(slime.slimeCollider.intersectsMesh(attackCollider, false) && attackCollider.checkCollisions) {
@@ -1086,6 +1085,7 @@ export class SceneCB {
                 slime.sprite.dispose();
                 slime.slimeCollider.dispose();
                 slime.attackCollider.dispose();
+                slimes.splice(slimes.indexOf(slime), 1);
                 return;
             }
             if(slime.sprite.cellIndex == 39) {
