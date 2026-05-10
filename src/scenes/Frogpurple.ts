@@ -50,7 +50,7 @@ export class Frogpurple {
         const scolliderWidth = slime.size * 0.7;   // narrower than sprite width
         const scolliderHeight = slime.size /1.4;   // close to sprite height
         const scolliderDepth = 0.1;                  // thin depth for 2D side view
-        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth+0.01, height: scolliderHeight+0.01, depth: scolliderDepth}, scene);
+        const slimeCollider = MeshBuilder.CreateBox("slimeCollider", {width: scolliderWidth-0.04, height: scolliderHeight-0.04, depth: scolliderDepth}, scene);
         slimeCollider.isVisible = false;
         slimeCollider.material = new StandardMaterial('slimeMaterial', scene);
         slimeCollider.checkCollisions = true;
@@ -67,7 +67,7 @@ export class Frogpurple {
         const speed = 0.005;
         const isAttacking = false;
         const pastFirstCycle = false;
-        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderHeight+0.02, height: scolliderWidth, depth: scolliderDepth}, scene);
+        const sattackCollider =  MeshBuilder.CreateBox("attackCollider", {width: scolliderWidth+0.01, height: scolliderHeight+0.01, depth: scolliderDepth}, scene);
         sattackCollider.isVisible = visible;
         sattackCollider.material = new StandardMaterial('playerMaterial', scene);
         sattackCollider.material.wireframe = true;

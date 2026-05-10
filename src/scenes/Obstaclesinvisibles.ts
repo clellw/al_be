@@ -1,9 +1,8 @@
 import {Scene, Engine, Camera, FreeCamera, Vector3, HemisphericLight, MeshBuilder, SpriteManager, Sprite, StandardMaterial, ActionManager, ExecuteCodeAction, Mesh, BackgroundMaterial, Texture, CubeTexture, Color3} from "@babylonjs/core"
 
-export class Obstacles {
+export class Obstaclesinvisibles {
     public name: string;
     public lemesh: Mesh;
-    public tiles: Sprite[];
 
     constructor(name: string, scene: Scene, initialPosition: Vector3, widthincubes: number, heightincubes: number,visible:boolean) {
         //a refaire de la meme maniere que ceului de ground
@@ -91,11 +90,6 @@ export class Obstacles {
             96, 
             scene
         );
-
-        // liste des sprites associés à cet obstacle
-        this.tiles = [];
-        // on attache la référence sur le mesh pour pouvoir les déplacer avec la souris
-        (ground as Mesh).metadata = { tiles: this.tiles };
 
         // === Création des tuiles selon heightincubes et widthincubes ===
         let tileIndex = 0;
@@ -191,13 +185,11 @@ export class Obstacles {
 
                 tile.position.x = initialPosition.x + offsetX;
                 tile.position.y = initialPosition.y + offsetY;
-                tile.position.z = initialPosition.z ;
+                tile.position.z = -0.01;
                 tile.size = 0.1501;
                 tile.cellIndex = 0;
                 tile.invertU = invertU;
-                tile.isVisible = true;
-
-                this.tiles.push(tile);
+                tile.isVisible = false;
             }
         }
         
