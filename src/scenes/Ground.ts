@@ -35,6 +35,13 @@ export class Ground {
             96,
             scene
         );
+        const underTilesManager = new SpriteManager(
+            "tilesManagerMiddle",
+            "./sprites/ground_u.png",
+            10000,           // max number of sprites
+            96,
+            scene
+        );
 
         this.tiles = [];
         (ground as Mesh).metadata = { kind: "ground", tiles: this.tiles };
@@ -59,6 +66,25 @@ export class Ground {
             tile.cellIndex = 0; // choose tile from sprite sheet
             tile.invertU = invertu;
             this.tiles.push(tile);
+
+            const tileu =  new Sprite("tileu" + i, underTilesManager);
+            tileu.position.x = initialPosition.x + offset;
+            tileu.size = 0.1501;
+            tileu.position.y = initialPosition.y - 0.147;
+            
+            tileu.position.z = -0.01;
+            tileu.cellIndex = 0; 
+            this.tiles.push(tileu);
+            
+            const tileu2 =  new Sprite("tileu2" + i, underTilesManager);
+            tileu2.position.x = initialPosition.x + offset;
+            tileu2.size = 0.1501;
+            tileu2.position.y = initialPosition.y - 0.2941;
+            tileu2.invertV = true;
+            
+            tileu2.position.z = -0.01;
+            tileu2.cellIndex = 0; 
+            this.tiles.push(tileu2);
         }
         
         // Adapter la taille du sprite à peu près à la largeur du mesh (2 unités)

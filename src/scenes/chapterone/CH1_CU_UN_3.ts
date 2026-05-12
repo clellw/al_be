@@ -213,7 +213,7 @@ export class CH1_CU_UN_3 {
         const speakerStatus: { [key: string]: string } = { "lyrina": "brown", "flusselle": "rgb(0, 157, 255)", "???": "green", "arthur": "green" };
 
         script.push("we should  have  arrived  to  the  location  the  thief  frequents.")
-        script.push("okay,  so  the  next  step  is  to  ask  the  persons  around  if  they  saw  him.")
+        script.push("so  the  next  step  is  to  ask  the  persons  around  if  they  saw  him.")
         script.push("so  this  is  the  'not  that  boring'  part  you  mentionned.")
         script.push("hey!  don't  say  it  like  that!  We  can  have  fun  talking  to  other  persons.")
         script.push("(as  if  I  could  qualify  them  as  'persons')")
@@ -221,7 +221,7 @@ export class CH1_CU_UN_3 {
         script.push("Nope!  that  was  the  worst!")
         script.push("see?  you're  like  an  open  book  for  me.")
         script.push("alright,  I  get  it.  let's  finish  this  quick  then.")
-        script.push("okay  then  back  to  my  plan  to  promote  social  interactions.")
+        script.push("okay,  then  back  to  my  plan  to  promote  social  interactions.")
         script.push("hey  mister!  have  you  seen  someone  with  a  green  orb  around  here?")
         script.push("oh!  you  mean  that  green  orb?")
         script.push(".............................")
